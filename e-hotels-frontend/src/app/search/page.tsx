@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { searchRooms } from '@/lib/api';
+import { searchRooms, getAllChains, getAllHotels, getAllRooms } from '@/lib/api';
 import { Room, HotelChain, Hotel, RoomCapacity, ViewType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,6 @@ import {
   Building2, Hotel as HotelIcon, DoorOpen, Info, Search, SlidersHorizontal,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-import { mockHotelChains, mockHotels, mockRooms } from '@/lib/mockData';
 
 const amenityIcons: Record<string, any> = {
   WiFi: Wifi,
@@ -25,14 +24,6 @@ const amenityIcons: Record<string, any> = {
   'Air Conditioning': Wind,
 };
 
-// Derive unique cities from all hotels
-const allCities = Array.from(new Set(mockHotels.map((h) => h.address.city))).sort();
-
-// All amenities that appear in rooms
-const allAmenities = Array.from(
-  new Set(mockRooms.flatMap((r) => r.amenities)),
-).sort();
-
 const viewTypes: ViewType[] = ['Sea View', 'Mountain View', 'City View', 'Garden View', 'No View'];
 const capacities: RoomCapacity[] = ['Single', 'Double', 'Triple', 'Suite', 'Family'];
 
@@ -40,6 +31,12 @@ type BreadcrumbLevel = 'chains' | 'hotels' | 'rooms';
 
 export default function SearchPage() {
   const searchParams = useSearchParams();
+
+  // ── Data fetched from API ──
+  const [allChains, setAllChains] = useState<HotelChain[]>([]);
+  const [allHotels, setAllHotels] = useState<Hotel[]>([]);
+  const [allCities, setAllCities] = useState<string[]>([]);
+  const [allAmenities, setAllAmenities] = useState<string[]>([]);
 
   // ── Hierarchy state ──
   const [selectedChain, setSelectedChain] = useState<HotelChain | null>(null);
@@ -69,6 +66,26 @@ export default function SearchPage() {
 
   const [showFilters, setShowFilters] = useState(true);
 
+  // ── Load chains, hotels, and derive cities/amenities on mount ──
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [chainsData, hotelsData, roomsData] = await Promise.all([
+          getAllChains(),
+          getAllHotels(),
+          getAllRooms(),
+        ]);
+        setAllChains(chainsData);
+        setAllHotels(hotelsData);
+        setAllCities(Array.from(new Set(hotelsData.map((h) => h.address.city))).sort());
+        setAllAmenities(Array.from(new Set(roomsData.flatMap((r) => r.amenities))).sort());
+      } catch {
+        toast({ title: 'Failed to load data', description: 'Could not fetch chains and hotels', variant: 'destructive' });
+      }
+    };
+    load();
+  }, []);
+
   const level: BreadcrumbLevel = selectedHotel
     ? 'rooms'
     : selectedChain
@@ -77,8 +94,8 @@ export default function SearchPage() {
 
   // ── Derived: filtered chains ──
   const filteredChains = useMemo(() => {
-    return mockHotelChains.filter((chain) => {
-      const chainHotels = mockHotels.filter((h) => h.chainId === chain.id);
+    return allChains.filter((chain) => {
+      const chainHotels = allHotels.filter((h) => h.chainId === chain.id);
 
       // Location filter: chain must have at least one hotel in any of the selected cities
       if (chainLocationFilter.length > 0) {
@@ -91,12 +108,12 @@ export default function SearchPage() {
 
       return true;
     });
-  }, [chainLocationFilter, chainMinHotels]);
+  }, [allChains, allHotels, chainLocationFilter, chainMinHotels]);
 
   // ── Derived: filtered hotels for selected chain ──
   const filteredHotels = useMemo(() => {
     if (!selectedChain) return [];
-    return mockHotels
+    return allHotels
       .filter((h) => h.chainId === selectedChain.id)
       .filter((hotel) => {
         if (hotelCityFilter.length > 0 && !hotelCityFilter.includes(hotel.address.city)) return false;
@@ -104,15 +121,15 @@ export default function SearchPage() {
         if (hotelMinRooms > 0 && hotel.numberOfRooms < hotelMinRooms) return false;
         return true;
       });
-  }, [selectedChain, hotelCityFilter, hotelCategoryFilter, hotelMinRooms]);
+  }, [allHotels, selectedChain, hotelCityFilter, hotelCategoryFilter, hotelMinRooms]);
 
   // Cities available for the selected chain (for hotel-level city filter)
   const chainCities = useMemo(() => {
     if (!selectedChain) return [];
     return Array.from(
-      new Set(mockHotels.filter((h) => h.chainId === selectedChain.id).map((h) => h.address.city)),
+      new Set(allHotels.filter((h) => h.chainId === selectedChain.id).map((h) => h.address.city)),
     ).sort();
-  }, [selectedChain]);
+  }, [allHotels, selectedChain]);
 
   // ── Fetch & filter rooms when hotel selected or room filters change ──
   useEffect(() => {
@@ -235,7 +252,7 @@ export default function SearchPage() {
           <div className="mb-6">
             <h1 className="text-3xl font-bold mb-1">Select a Hotel Chain</h1>
             <p className="text-muted-foreground">
-              {filteredChains.length} of {mockHotelChains.length} chains shown
+              {filteredChains.length} of {allChains.length} chains shown
             </p>
           </div>
 
@@ -298,7 +315,7 @@ export default function SearchPage() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {filteredChains.map((chain) => {
-                    const hotelCount = mockHotels.filter((h) => h.chainId === chain.id).length;
+                    const hotelCount = allHotels.filter((h) => h.chainId === chain.id).length;
                     return (
                       <Card
                         key={chain.id}

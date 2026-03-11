@@ -65,34 +65,79 @@ DATABASE_URL=postgresql://YOUR_USERNAME:YOUR_PASSWORD@localhost:5432/HotelProjec
 ```
 ---
 
-## 🚀 4. Running the App
+## 🚀 4. Running the Backend
 
-With the `venv` active and `.env` configured, start the FastAPI server:
+With the `venv` active and `.env` configured, start the FastAPI server from the `backend` folder:
+
+```bash
+cd backend
+python main.py
+```
+
+Or equivalently:
 
 ```bash
 uvicorn main:app --reload
-
 ```
 
-The API will be available at: `http://127.0.0.1:8000`
-Documentation (Swagger UI) is at: `http://127.0.0.1:8000/docs`
+The API will be available at: `http://localhost:8000`
+Documentation (Swagger UI) is at: `http://localhost:8000/docs`
+
+You can verify the backend is running by visiting `http://localhost:8000/` in your browser — you should see:
+
+```json
+{"message": "e-Hotels API is running"}
+```
+
+---
+
+## 🌐 5. Running the Frontend
+
+In a **separate terminal**, navigate to the frontend folder and start the Next.js dev server:
+
+```bash
+cd e-hotels-frontend
+npm install        # only needed the first time or after package.json changes
+npm run dev
+```
+
+The frontend will be available at: `http://localhost:3000`
+
+---
+
+## 🔗 6. Verifying the Frontend-Backend Connection
+
+The frontend connects to the backend at `http://localhost:8000` by default (configured via `NEXT_PUBLIC_API_URL`).
+
+To confirm everything is connected:
+
+1. **Start the backend** first (`python main.py` from the `backend` folder).
+2. **Start the frontend** (`npm run dev` from the `e-hotels-frontend` folder).
+3. Open `http://localhost:3000` in your browser.
+4. Navigate to the **Search** page — you should see the hotel chains load (Marriott, Hilton, etc.).
+5. Check the **backend terminal** — you should see log lines like:
+   ```
+   INFO:     127.0.0.1:XXXXX - "GET /api/chains HTTP/1.1" 200 OK
+   INFO:     127.0.0.1:XXXXX - "GET /api/hotels HTTP/1.1" 200 OK
+   INFO:     127.0.0.1:XXXXX - "GET /api/search/rooms HTTP/1.1" 200 OK
+   ```
+
+If the frontend cannot reach the backend, you'll see errors in the browser console. Make sure:
+- The backend is running on port **8000**
+- No firewall is blocking `localhost:8000`
+- Both terminals are open at the same time
 
 ---
 
 ## 🤝 Team Workflow Summary
 
 1. **Pull** the latest code.
-2. **Activate** your `venv`.
+2. **Activate** your `venv` (in the `backend` folder).
 3. **Run** `pip install -r requirements.txt` if someone added new tools.
-4. **Code** your feature.
-5. **Freeze** if you added a new library (`pip freeze > requirements.txt`).
-6. **Push** your changes.
+4. **Start the backend**: `python main.py`
+5. **Start the frontend** (separate terminal): `cd e-hotels-frontend && npm run dev`
+6. **Code** your feature.
+7. **Freeze** if you added a new library (`pip freeze > requirements.txt`).
+8. **Push** your changes.
 
-```
-
-
-
-### One last tip for you:
-Since you mentioned they could "just use global dependencies"—**try to discourage that!** If a teammate uses global dependencies, they might accidentally forget to add a package to the `requirements.txt`. Then, when you pull their code, your app will crash because you're missing a library they had "globally" on their laptop. Stick to the `venv` rule; it saves a lot of headaches!
-
-```
+> **Tip:** Always keep both the backend and frontend running while developing. The frontend makes real API calls to the backend — it won't work without it.
