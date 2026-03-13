@@ -34,6 +34,5 @@ VALUES (
 INSERT INTO hotel_email (chain_id, hotel_id, email)
 VALUES (3, (SELECT hotel_id FROM hotels WHERE hotel_name = 'E-Hotel Downtown' AND chain_id = 3), 'downtown@ehotel.ca');
 
--- 3. Add the Mandatory Phone Number
 INSERT INTO hotel_phone (chain_id, hotel_id, phone_number)
 VALUES (3, (SELECT hotel_id FROM hotels WHERE hotel_name = 'E-Hotel Downtown' AND chain_id = 3), '613-555-0111');
