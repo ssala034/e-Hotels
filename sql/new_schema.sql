@@ -1,0 +1,2 @@
+DROP SCHEMA "HotelProject" CASCADE;
+CREATE SCHEMA "HotelProject";

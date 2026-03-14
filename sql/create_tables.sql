@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS hotel_chains(
     city 			VARCHAR(30) NOT NULL,
     region			VARCHAR(30) NOT NULL,
 	street_name		VARCHAR(30) NOT NULL, -- removed street
-	stree_number	SMALLINT NOT NULL,
+	street_number	SMALLINT NOT NULL,
     postalcode		CHAR(6) NOT NULL,
 	PRIMARY KEY		(chain_id)
 );
@@ -37,18 +37,38 @@ CREATE TABLE IF NOT EXISTS hotelchain_phones (
 );
 
 -- ========================
+-- PERSON
+-- ========================
+CREATE TABLE IF NOT EXISTS person (
+    person_id       INTEGER GENERATED ALWAYS AS IDENTITY,
+    first_name      VARCHAR(30) NOT NULL,
+    last_name       VARCHAR(30) NOT NULL,
+    ssn_type        VARCHAR(20) NOT NULL,
+    ssn_number      VARCHAR(30) NOT NULL,
+    country         VARCHAR(20) NOT NULL,
+    city            VARCHAR(30) NOT NULL,
+    region          VARCHAR(30),
+    street_name     VARCHAR(30),
+    street_number   SMALLINT,
+    postalcode      VARCHAR(10),
+    PRIMARY KEY (person_id),
+    UNIQUE (ssn_number, ssn_type),
+    CHECK (ssn_type IN ('SSN', 'SIN', 'Drivers License', 'Passport'))
+);
+
+-- ========================
 -- Hotel
 -- ========================
 CREATE TABLE IF NOT EXISTS hotels (
    chain_id			INTEGER,
    hotel_id			INTEGER GENERATED ALWAYS AS IDENTITY, -- should I removed GENERATED ALWAYS AS IDENTITY cuz its (chain_id, hotel_id) that is unique, maybe too much logic?
-   hotel_name		VARCHAR(20) NOT NULL,
+   hotel_name		VARCHAR(25) NOT NULL,
    category			SMALLINT NOT NULL,
    country			VARCHAR(20) NOT NULL,
    city 			VARCHAR(30) NOT NULL,
    region			VARCHAR(30) NOT NULL,
    street_name		VARCHAR(30) NOT NULL, -- removed street
-   stree_number		SMALLINT NOT NULL,
+   street_number	SMALLINT NOT NULL,
    postalcode		CHAR(6) NOT NULL,
    manager_id		INTEGER, -- don't forget to add trigger for this
 
@@ -126,34 +146,14 @@ CREATE TABLE IF NOT EXISTS room_extendible (
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS room_issue (
+CREATE TABLE IF NOT EXISTS room_issues (
     chain_id        INTEGER NOT NULL,
     hotel_id        INTEGER NOT NULL,
     room_num        CHAR(5) NOT NULL,
-    room_issue      VARCHAR(100) NOT NULL,
-    PRIMARY KEY (chain_id, hotel_id, room_num, room_issue),
+    issue      		VARCHAR(100) NOT NULL,
+    PRIMARY KEY (chain_id, hotel_id, room_num, issue),
     FOREIGN KEY (chain_id, hotel_id, room_num) REFERENCES rooms (chain_id, hotel_id, room_num)
         ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- ========================
--- PERSON
--- ========================
-CREATE TABLE IF NOT EXISTS person (
-    person_id       INTEGER GENERATED ALWAYS AS IDENTITY,
-    first_name      VARCHAR(30) NOT NULL,
-    last_name       VARCHAR(30) NOT NULL,
-    ssn_type        VARCHAR(20) NOT NULL,
-    ssn_number      VARCHAR(30) NOT NULL,
-    country         VARCHAR(20) NOT NULL,
-    city            VARCHAR(30) NOT NULL,
-    region          VARCHAR(30),
-    street_name     VARCHAR(30),
-    street_number   SMALLINT,
-    postalcode      VARCHAR(10),
-    PRIMARY KEY (person_id),
-    UNIQUE (ssn_number, ssn_type),
-    CHECK (ssn_type IN ('SSN', 'SIN', 'Drivers License', 'Passport'))
 );
 
 -- ========================
@@ -169,7 +169,7 @@ CREATE TABLE IF NOT EXISTS customer (
 );
 
 -- ========================
--- EMPLOYEE
+-- EMPLOYEE 
 -- ========================
 CREATE TABLE IF NOT EXISTS employee (
     person_id       INTEGER NOT NULL,
