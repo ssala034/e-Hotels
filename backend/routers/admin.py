@@ -1,8 +1,16 @@
-from fastapi import APIRouter, HTTPException, Query
+﻿from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from datetime import datetime
 from models import ChainData, HotelData, RoomData, EmployeeData, CustomerData
 import mock_data
+from database import (
+    db_get_all_chains,
+    db_get_chain_by_id,
+    db_get_all_hotels,
+    db_get_hotel_by_id,
+    db_get_all_rooms,
+    db_get_room_by_id,
+)
 
 router = APIRouter()
 
@@ -17,12 +25,12 @@ def _find(lst, id_val):
 
 @router.get("/chains")
 def get_all_chains():
-    return list(mock_data.chains)
+    return db_get_all_chains()
 
 
 @router.get("/chains/{chain_id}")
 def get_chain_by_id(chain_id: str):
-    chain = _find(mock_data.chains, chain_id)
+    chain = db_get_chain_by_id(chain_id)
     if not chain:
         raise HTTPException(status_code=404, detail="Chain not found")
     return chain
@@ -83,22 +91,20 @@ def get_all_hotels(
     category: Optional[int] = Query(None),
     city: Optional[str] = Query(None),
 ):
-    results = list(mock_data.hotels)
-    if chainId:
-        results = [h for h in results if h["chainId"] == chainId]
-    if category:
-        results = [h for h in results if h["category"] == category]
-    if city:
-        results = [h for h in results if h["address"]["city"] == city]
-    return [_enrich_hotel(h) for h in results]
+    results = db_get_all_hotels({
+        "chainId": chainId,
+        "category": category,
+        "city": city,
+    })
+    return results
 
 
 @router.get("/hotels/{hotel_id}")
 def get_hotel(hotel_id: str):
-    hotel = _find(mock_data.hotels, hotel_id)
+    hotel = db_get_hotel_by_id(hotel_id)
     if not hotel:
         raise HTTPException(status_code=404, detail="Hotel not found")
-    return _enrich_hotel(hotel)
+    return hotel
 
 
 @router.post("/hotels")
@@ -162,29 +168,24 @@ def get_all_rooms(
     minPrice: Optional[float] = Query(None),
     maxPrice: Optional[float] = Query(None),
 ):
-    results = list(mock_data.rooms)
-    if hotelId:
-        results = [r for r in results if r["hotelId"] == hotelId]
-    if capacity:
-        results = [r for r in results if r["capacity"] == capacity]
-    if minPrice is not None:
-        results = [r for r in results if r["price"] >= minPrice]
-    if maxPrice is not None:
-        results = [r for r in results if r["price"] <= maxPrice]
-    enriched = []
-    for room in results:
-        hotel = _find(mock_data.hotels, room["hotelId"])
-        enriched.append({**room, "hotel": hotel} if hotel else room)
-    return enriched
+    return db_get_all_rooms({
+        "hotelId": hotelId,
+        "capacity": capacity,
+        "minPrice": minPrice,
+        "maxPrice": maxPrice,
+    })
 
 
 @router.get("/rooms/{room_id}")
 def get_room(room_id: str):
-    room = _find(mock_data.rooms, room_id)
+    room = db_get_room_by_id(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    hotel = _find(mock_data.hotels, room["hotelId"])
-    return {**room, "hotel": hotel} if hotel else room
+    hotel = db_get_hotel_by_id(room["hotelId"])
+    if hotel:
+        chain = db_get_chain_by_id(hotel["chainId"])
+        room["hotel"] = {**hotel, "chain": chain} if chain else hotel
+    return room
 
 
 @router.post("/rooms")

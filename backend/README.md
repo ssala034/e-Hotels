@@ -58,14 +58,53 @@ The `.env` file contains sensitive info like database passwords. It is **ignored
 
 1. Find the file `backend/.env.example`.
 2. Duplicate it and rename the copy to `.env`.
-3. Open `.env` and update the `DATABASE_URL` with your local PostgreSQL credentials:
+3. Open `.env` and fill in your local PostgreSQL credentials:
 ```text
-DATABASE_URL=postgresql://YOUR_USERNAME:YOUR_PASSWORD@localhost:5432/HotelProject
-
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=postgres
+DB_USER=postgres
+DB_PASSWORD=your_pgadmin_password
+DB_SCHEMA=HotelProject
 ```
 ---
+## 🐘 4. Start PostgreSQL (Before Running the Backend)
 
-## 🚀 4. Running the Backend
+The backend cannot connect to the database unless PostgreSQL is running on your machine first.
+
+### A. Check if PostgreSQL is already running
+```bash
+pg_isready -h localhost -p 5432
+```
+
+- If you see `accepting connections` → PostgreSQL is running, skip to step 5.
+- If you see `no response` or `refusing connection` → start it using the steps below.
+
+### B. Start PostgreSQL
+
+**Windows** (run PowerShell as Administrator):
+```bash
+net start postgresql-x64-18
+```
+> ⚠️ The service name may differ slightly depending on your version. To find the exact name, open **Task Manager → Services** and search for `postgresql`.
+
+**Mac:**
+```bash
+brew services start postgresql
+```
+
+**Linux:**
+```bash
+sudo systemctl start postgresql
+```
+
+### C. Alternatively — just open pgAdmin
+
+Opening pgAdmin and clicking on your server in the left panel will start PostgreSQL automatically. This is the easiest option on Windows.
+
+---
+
+## 🚀 5. Running the Backend
 
 With the `venv` active and `.env` configured, start the FastAPI server from the `backend` folder:
 
@@ -91,7 +130,7 @@ You can verify the backend is running by visiting `http://localhost:8000/` in yo
 
 ---
 
-## 🌐 5. Running the Frontend
+## 🌐 6. Running the Frontend
 
 In a **separate terminal**, navigate to the frontend folder and start the Next.js dev server:
 
@@ -105,7 +144,16 @@ The frontend will be available at: `http://localhost:3000`
 
 ---
 
-## 🔗 6. Verifying the Frontend-Backend Connection
+## 🔗 7. Verifying Connections
+
+### A. Verify the backend is connected to the database
+
+Visit `http://localhost:8000/health` in your browser — you should see:
+```json
+{"status": "Connected to PostgreSQL successfully"}
+```
+
+### B. Verify the backend is connected to the frontend
 
 The frontend connects to the backend at `http://localhost:8000` by default (configured via `NEXT_PUBLIC_API_URL`).
 

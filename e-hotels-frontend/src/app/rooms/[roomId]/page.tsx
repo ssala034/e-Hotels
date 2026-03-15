@@ -3,21 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getRoom } from '@/lib/api';
+import { getRoom, getHotel } from '@/lib/api';
 import { Room, Hotel } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toaster';
-import { ArrowLeft, MapPin, Star, Users, Eye, Wifi, Tv, Coffee, Wind, Info } from 'lucide-react';
+import { ArrowLeft, MapPin, Star, Users, Eye, Info } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-
-const amenityIcons: Record<string, any> = {
-  WiFi: Wifi,
-  TV: Tv,
-  'Mini Bar': Coffee,
-  'Air Conditioning': Wind,
-};
 
 export default function RoomDetailsPage() {
   const params = useParams();
@@ -39,7 +32,12 @@ export default function RoomDetailsPage() {
         throw new Error('Room not found');
       }
       setRoom(roomData);
-      setHotel(roomData.hotel as Hotel | null);
+      if (roomData.hotel) {
+        setHotel(roomData.hotel as Hotel);
+      } else {
+        const hotelData = await getHotel(roomData.hotelId).catch(() => null);
+        setHotel(hotelData);
+      }
     } catch (error) {
       toast({
         title: 'Error loading room',
@@ -77,6 +75,19 @@ export default function RoomDetailsPage() {
       </div>
     );
   }
+
+  const issues = room.issues && room.issues.length > 0
+    ? room.issues
+    : room.problems
+    ? [room.problems]
+    : [];
+  const amenitiesText = room.amenities && room.amenities.length > 0
+    ? room.amenities.join(', ')
+    : 'Empty';
+  const issuesText = issues.length > 0 ? issues.join(', ') : 'Empty';
+  const extendableWithText = room.extendableWith && room.extendableWith.length > 0
+    ? room.extendableWith.join(', ')
+    : 'Empty';
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -148,8 +159,8 @@ export default function RoomDetailsPage() {
                 {room.isExtendable && (
                   <Badge variant="default">Extendable</Badge>
                 )}
-                {room.problems && (
-                  <Badge variant="destructive">Has Issues - {room.problems}</Badge>
+                {issues.length > 0 && (
+                  <Badge variant="destructive">Has Issues</Badge>
                 )}
               </div>
 
@@ -163,22 +174,20 @@ export default function RoomDetailsPage() {
               </div>
 
               {/* Amenities */}
-              {room.amenities && room.amenities.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">Amenities</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {room.amenities.map((amenity) => {
-                      const Icon = amenityIcons[amenity];
-                      return (
-                        <div key={amenity} className="flex items-center text-muted-foreground">
-                          {Icon && <Icon className="w-5 h-5 mr-2" />}
-                          {amenity}
-                        </div>
-                      );
-                    })}
-                  </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Amenities</h3>
+                <p className="text-muted-foreground">{amenitiesText}</p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Room Status</h3>
+                <div className="space-y-2 text-muted-foreground">
+                  <p>
+                    Extendable With: {room.isExtendable ? extendableWithText : 'Empty'}
+                  </p>
+                  <p>Issues: {issuesText}</p>
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
 

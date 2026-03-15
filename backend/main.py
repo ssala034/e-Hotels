@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from config import FRONTEND_URL, BACKEND_PORT
 from routers import auth, search, bookings, rentings, payments, admin
+from database import get_connection
 
 app = FastAPI(title="e-Hotels API")
 
@@ -26,6 +27,16 @@ app.include_router(admin.router,    prefix="/api",          tags=["Admin"])
 @app.get("/")
 def root():
     return {"message": "e-Hotels API is running"}
+
+# Test route to confirm DB connection works
+@app.get("/db-health")
+def health_check():
+    try:
+        conn = get_connection()
+        conn.close()
+        return {"status": "Connected to PostgreSQL successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

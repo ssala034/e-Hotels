@@ -3,6 +3,7 @@ DATABASE_URL=<..>
 
 DB_HOST=localhost/<port>
 DB_NAME=postgres
+DB_PORT=XXXX
 DB_USER=postgres
 DB_PASSWORD=your_password
 DB_SCHEMA=<..>

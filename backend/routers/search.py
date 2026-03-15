@@ -3,6 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 from models import SearchCriteria
 import mock_data
+from database import db_get_all_rooms, db_get_all_hotels, db_get_all_chains
 
 router = APIRouter()
 
@@ -45,69 +46,78 @@ def _find_chain(chain_id: str):
 
 @router.post("/rooms")
 def search_rooms(criteria: SearchCriteria):
-    results = list(mock_data.rooms)
+    base_rooms = db_get_all_rooms({
+        "minPrice": criteria.minPrice,
+        "maxPrice": criteria.maxPrice,
+    })
+    all_hotels = db_get_all_hotels({})
+    all_chains = db_get_all_chains()
 
-    # Filter by date availability
+    hotel_by_id = {h["id"]: h for h in all_hotels}
+    chain_by_id = {c["id"]: c for c in all_chains}
+
+    results = list(base_rooms)
+
+    # Filter by date availability (mock booking data currently uses mock room IDs).
     if criteria.checkInDate and criteria.checkOutDate:
-        results = [r for r in results if not _has_date_conflict(r["id"], criteria.checkInDate, criteria.checkOutDate)]
+        results = [
+            r for r in results if not _has_date_conflict(r["id"], criteria.checkInDate, criteria.checkOutDate)
+        ]
 
-    # Filter by area
     if criteria.area:
-        results = [r for r in results if (h := _find_hotel(r["hotelId"])) and h["address"]["city"] in criteria.area]
+        results = [
+            r for r in results
+            if (h := hotel_by_id.get(r["hotelId"])) and h["address"]["city"] in criteria.area
+        ]
 
-    # Filter by chain
     if criteria.chainId:
-        results = [r for r in results if (h := _find_hotel(r["hotelId"])) and h["chainId"] in criteria.chainId]
+        results = [
+            r for r in results
+            if (h := hotel_by_id.get(r["hotelId"])) and h["chainId"] in criteria.chainId
+        ]
 
-    # Filter by category (star rating)
     if criteria.category:
-        results = [r for r in results if (h := _find_hotel(r["hotelId"])) and h["category"] in criteria.category]
+        results = [
+            r for r in results
+            if (h := hotel_by_id.get(r["hotelId"])) and h["category"] in criteria.category
+        ]
 
-    # Filter by capacity
     if criteria.capacity:
         results = [r for r in results if r["capacity"] in criteria.capacity]
 
-    # Filter by price range
-    if criteria.minPrice is not None:
-        results = [r for r in results if r["price"] >= criteria.minPrice]
-    if criteria.maxPrice is not None:
-        results = [r for r in results if r["price"] <= criteria.maxPrice]
-
-    # Filter by hotel room count
     if criteria.minHotelRooms is not None or criteria.maxHotelRooms is not None:
         def _room_count_ok(room):
-            hotel = _find_hotel(room["hotelId"])
+            hotel = hotel_by_id.get(room["hotelId"])
             if not hotel:
                 return False
-            if criteria.minHotelRooms and hotel["numberOfRooms"] < criteria.minHotelRooms:
+            if criteria.minHotelRooms is not None and hotel["numberOfRooms"] < criteria.minHotelRooms:
                 return False
-            if criteria.maxHotelRooms and hotel["numberOfRooms"] > criteria.maxHotelRooms:
+            if criteria.maxHotelRooms is not None and hotel["numberOfRooms"] > criteria.maxHotelRooms:
                 return False
             return True
+
         results = [r for r in results if _room_count_ok(r)]
 
-    # Filter by amenities
     if criteria.amenities:
-        results = [r for r in results if all(a in r["amenities"] for a in criteria.amenities)]
+        results = [r for r in results if all(a in r.get("amenities", []) for a in criteria.amenities)]
 
-    # Filter by view type
     if criteria.viewType:
         results = [r for r in results if r["viewType"] in criteria.viewType]
 
-    # Filter extendable only
     if criteria.extendableOnly:
-        results = [r for r in results if r["isExtendable"]]
+        results = [r for r in results if r.get("isExtendable")]
 
-    # Exclude damaged rooms
     if criteria.excludeDamaged:
-        results = [r for r in results if not r.get("problems")]
+        results = [
+            r for r in results
+            if not r.get("problems") and not r.get("issues")
+        ]
 
-    # Enrich rooms with hotel and chain data
     enriched = []
     for room in results:
-        hotel = _find_hotel(room["hotelId"])
+        hotel = hotel_by_id.get(room["hotelId"])
         if hotel:
-            chain = _find_chain(hotel["chainId"])
+            chain = chain_by_id.get(hotel["chainId"])
             hotel_with_chain = {**hotel, "chain": chain} if chain else hotel
             enriched.append({**room, "hotel": hotel_with_chain})
         else:

@@ -12,17 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toaster';
 import {
-  Home, ChevronRight, MapPin, Users, Star, Wifi, Tv, Coffee, Wind, Eye,
+  Home, ChevronRight, MapPin, Users, Star, Eye,
   Building2, Hotel as HotelIcon, DoorOpen, Info, Search, SlidersHorizontal,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-
-const amenityIcons: Record<string, any> = {
-  WiFi: Wifi,
-  TV: Tv,
-  'Mini Bar': Coffee,
-  'Air Conditioning': Wind,
-};
 
 const viewTypes: ViewType[] = ['Sea View', 'Mountain View', 'City View', 'Garden View', 'No View'];
 const capacities: RoomCapacity[] = ['Single', 'Double', 'Triple', 'Suite', 'Family'];
@@ -62,7 +55,7 @@ export default function SearchPage() {
   const [roomViewFilter, setRoomViewFilter] = useState<ViewType[]>([]);
   const [roomAmenityFilter, setRoomAmenityFilter] = useState<string[]>([]);
   const [roomExtendableOnly, setRoomExtendableOnly] = useState(false);
-  const [roomExcludeDamaged, setRoomExcludeDamaged] = useState(true);
+  const [roomExcludeDamaged, setRoomExcludeDamaged] = useState(false);
 
   const [showFilters, setShowFilters] = useState(true);
 
@@ -130,6 +123,11 @@ export default function SearchPage() {
       new Set(allHotels.filter((h) => h.chainId === selectedChain.id).map((h) => h.address.city)),
     ).sort();
   }, [allHotels, selectedChain]);
+
+  const availableRoomCount = useMemo(
+    () => rooms.filter((room) => String(room.status || '').toLowerCase() === 'available').length,
+    [rooms],
+  );
 
   // ── Fetch & filter rooms when hotel selected or room filters change ──
   useEffect(() => {
@@ -498,7 +496,7 @@ export default function SearchPage() {
               </span>
               <span>·</span>
               <span>
-                {rooms.length} {rooms.length === 1 ? 'room' : 'rooms'} available
+                {rooms.length} {rooms.length === 1 ? 'room' : 'rooms'} shown ({availableRoomCount} available)
               </span>
             </p>
           </div>
@@ -616,7 +614,7 @@ export default function SearchPage() {
                     onChange={(e) => setRoomExcludeDamaged(e.target.checked)}
                     className="rounded"
                   />
-                  <span>Hide damaged rooms</span>
+                  <span>Hide rooms with issues</span>
                 </label>
               </div>
 
@@ -631,7 +629,7 @@ export default function SearchPage() {
                   setRoomViewFilter([]);
                   setRoomAmenityFilter([]);
                   setRoomExtendableOnly(false);
-                  setRoomExcludeDamaged(true);
+                  setRoomExcludeDamaged(false);
                 }}
               >
                 Clear Filters
@@ -651,90 +649,106 @@ export default function SearchPage() {
                     <Info className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                     <h3 className="text-lg font-semibold mb-2">No rooms found</h3>
                     <p className="text-muted-foreground">Try adjusting your filters</p>
+                    {roomExcludeDamaged && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        "Hide rooms with issues" is enabled and may be filtering all results.
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
-                rooms.map((room) => (
-                  <Card key={room.id} className="hover:shadow-lg transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Room Image Placeholder */}
-                        <div className="md:col-span-1">
-                          <div className="aspect-video bg-gradient-to-br from-primary/20 to-primary/5 rounded-lg flex items-center justify-center">
-                            <DoorOpen className="w-12 h-12 text-primary/40" />
-                          </div>
-                        </div>
+                rooms.map((room) => {
+                  const issues = room.issues && room.issues.length > 0
+                    ? room.issues
+                    : room.problems
+                    ? [room.problems]
+                    : [];
+                  const amenitiesText = room.amenities && room.amenities.length > 0
+                    ? room.amenities.join(', ')
+                    : 'Empty';
+                  const issuesText = issues.length > 0 ? issues.join(', ') : 'Empty';
+                  const isAvailable = String(room.status || '').toLowerCase() === 'available';
 
-                        {/* Room Details */}
-                        <div className="md:col-span-2 space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h3 className="text-xl font-semibold">
-                                Room #{room.roomNumber} — {room.roomType}
-                              </h3>
+                  return (
+                    <Card key={room.id} className="hover:shadow-lg transition-shadow">
+                      <CardContent className="p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {/* Room Image Placeholder */}
+                          <div className="md:col-span-1">
+                            <div className="aspect-video bg-gradient-to-br from-primary/20 to-primary/5 rounded-lg flex items-center justify-center">
+                              <DoorOpen className="w-12 h-12 text-primary/40" />
                             </div>
-                            <div className="text-right">
-                              <div className="text-2xl font-bold text-primary">
-                                {formatCurrency(room.price)}
+                          </div>
+
+                          {/* Room Details */}
+                          <div className="md:col-span-2 space-y-3">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <h3 className="text-xl font-semibold">
+                                  Room #{room.roomNumber} — {room.roomType}
+                                </h3>
                               </div>
-                              <div className="text-sm text-muted-foreground">per night</div>
+                              <div className="text-right">
+                                <div className="text-2xl font-bold text-primary">
+                                  {formatCurrency(room.price)}
+                                </div>
+                                <div className="text-sm text-muted-foreground">per night</div>
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="flex flex-wrap gap-2">
-                            <Badge variant="secondary">
-                              <Users className="w-3 h-3 mr-1" />
-                              {room.capacity}
-                            </Badge>
-                            {room.viewType && (
-                              <Badge variant="secondary">
-                                <Eye className="w-3 h-3 mr-1" />
-                                {room.viewType}
-                              </Badge>
-                            )}
-                            {room.isExtendable && <Badge variant="default">Extendable</Badge>}
-                            {room.problems && <Badge variant="destructive">Has Issues</Badge>}
-                          </div>
-
-                          {room.amenities && room.amenities.length > 0 && (
                             <div className="flex flex-wrap gap-2">
-                              {room.amenities.slice(0, 4).map((amenity) => {
-                                const Icon = amenityIcons[amenity];
-                                return (
-                                  <span
-                                    key={amenity}
-                                    className="text-sm text-muted-foreground flex items-center"
+                              <Badge variant="secondary">
+                                <Users className="w-3 h-3 mr-1" />
+                                {room.capacity}
+                              </Badge>
+                              {room.viewType && (
+                                <Badge variant="secondary">
+                                  <Eye className="w-3 h-3 mr-1" />
+                                  {room.viewType}
+                                </Badge>
+                              )}
+                              {room.status && (
+                                <Badge variant={isAvailable ? 'secondary' : 'destructive'}>
+                                  {room.status}
+                                </Badge>
+                              )}
+                              {room.isExtendable && <Badge variant="default">Extendable</Badge>}
+                              {issues.length > 0 && <Badge variant="destructive">Has Issues</Badge>}
+                            </div>
+
+                              <div className="space-y-1 text-sm text-muted-foreground">
+                                <p>
+                                  <span className="font-medium text-foreground/90">Amenities:</span> {amenitiesText}
+                                </p>
+                                <p>
+                                  <span className="font-medium text-foreground/90">Issues:</span> {issuesText}
+                                </p>
+                              </div>
+
+                            <div className="flex gap-2 pt-2">
+                              <Button asChild className="flex-1">
+                                <Link href={`/rooms/${room.id}`}>View Details</Link>
+                              </Button>
+                              {isAvailable ? (
+                                <Button asChild variant="outline" className="flex-1">
+                                  <Link
+                                    href={`/booking/confirm?roomId=${room.id}&checkIn=${roomCheckIn}&checkOut=${roomCheckOut}`}
                                   >
-                                    {Icon && <Icon className="w-4 h-4 mr-1" />}
-                                    {amenity}
-                                  </span>
-                                );
-                              })}
-                              {room.amenities.length > 4 && (
-                                <span className="text-sm text-muted-foreground">
-                                  +{room.amenities.length - 4} more
-                                </span>
+                                    Book Now
+                                  </Link>
+                                </Button>
+                              ) : (
+                                <Button variant="outline" className="flex-1" disabled>
+                                  Unavailable
+                                </Button>
                               )}
                             </div>
-                          )}
-
-                          <div className="flex gap-2 pt-2">
-                            <Button asChild className="flex-1">
-                              <Link href={`/rooms/${room.id}`}>View Details</Link>
-                            </Button>
-                            <Button asChild variant="outline" className="flex-1">
-                              <Link
-                                href={`/booking/confirm?roomId=${room.id}&checkIn=${roomCheckIn}&checkOut=${roomCheckOut}`}
-                              >
-                                Book Now
-                              </Link>
-                            </Button>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </div>
           </div>

@@ -33,7 +33,10 @@ export interface Room {
   amenities: string[];
   capacity: RoomCapacity;
   viewType: ViewType;
+  status?: string;
   isExtendable: boolean;
+  extendableWith?: string[];
+  issues?: string[];
   problems?: string;
   images?: string[];
 }
