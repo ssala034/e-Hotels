@@ -667,7 +667,7 @@ export default function SearchPage() {
                     ? room.amenities.join(', ')
                     : 'Empty';
                   const issuesText = issues.length > 0 ? issues.join(', ') : 'Empty';
-                  const isAvailable = String(room.status || '').toLowerCase() === 'available';
+                  const isAvailableStatus = String(room.status || '').toLowerCase() === 'available';
 
                   return (
                     <Card key={room.id} className="hover:shadow-lg transition-shadow">
@@ -708,7 +708,7 @@ export default function SearchPage() {
                                 </Badge>
                               )}
                               {room.status && (
-                                <Badge variant={isAvailable ? 'secondary' : 'destructive'}>
+                                <Badge variant={isAvailableStatus ? 'secondary' : 'destructive'}>
                                   {room.status}
                                 </Badge>
                               )}
@@ -729,19 +729,13 @@ export default function SearchPage() {
                               <Button asChild className="flex-1">
                                 <Link href={`/rooms/${room.id}`}>View Details</Link>
                               </Button>
-                              {isAvailable ? (
-                                <Button asChild variant="outline" className="flex-1">
-                                  <Link
-                                    href={`/booking/confirm?roomId=${room.id}&checkIn=${roomCheckIn}&checkOut=${roomCheckOut}`}
-                                  >
-                                    Book Now
-                                  </Link>
-                                </Button>
-                              ) : (
-                                <Button variant="outline" className="flex-1" disabled>
-                                  Unavailable
-                                </Button>
-                              )}
+                              <Button asChild variant="outline" className="flex-1">
+                                <Link
+                                  href={`/booking/confirm?roomId=${room.id}&checkIn=${roomCheckIn}&checkOut=${roomCheckOut}`}
+                                >
+                                  Book Now
+                                </Link>
+                              </Button>
                             </div>
                           </div>
                         </div>

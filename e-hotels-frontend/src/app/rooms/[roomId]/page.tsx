@@ -270,7 +270,6 @@ export default function RoomDetailsPage() {
 
               <Button 
                 className="w-full" 
-                disabled={!!room.problems}
                 onClick={() => {
                   const checkIn = (document.getElementById('checkIn') as HTMLInputElement)?.value;
                   const checkOut = (document.getElementById('checkOut') as HTMLInputElement)?.value;
@@ -287,14 +286,12 @@ export default function RoomDetailsPage() {
                   router.push(`/booking/confirm?roomId=${room.id}&checkIn=${checkIn}&checkOut=${checkOut}`);
                 }}
               >
-                {room.problems ? 'Room Not Available' : 'Reserve Now'}
+                Reserve Now
               </Button>
 
-              {!room.problems && (
-                <p className="text-xs text-center text-muted-foreground">
-                  You won't be charged yet
-                </p>
-              )}
+              <p className="text-xs text-center text-muted-foreground">
+                You won't be charged yet
+              </p>
             </CardContent>
           </Card>
         </div>
