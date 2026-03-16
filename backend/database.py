@@ -12,7 +12,8 @@ def get_connection():
         user=DB_USER,
         password=DB_PASSWORD,
     )
-    # This line ensures every query knows where to look by default
+
+    # Ensures all queries run with the correct schema
     with conn.cursor() as cur:
         cur.execute('SET search_path TO "HotelProject", public;')
     return conn
@@ -121,20 +122,20 @@ def db_get_all_chains():
             hc.postalcode,
             (
                 SELECT COUNT(*)
-                FROM "HotelProject".hotels h
+                FROM hotels h
                 WHERE h.chain_id = hc.chain_id
             ) AS total_hotels,
             (
                 SELECT ARRAY_AGG(hce.email ORDER BY hce.email)
-                FROM "HotelProject".hotelchain_emails hce
+                FROM hotelchain_emails hce
                 WHERE hce.chain_id = hc.chain_id
             ) AS contact_emails,
             (
                 SELECT ARRAY_AGG(hcp.phone_number ORDER BY hcp.phone_number)
-                FROM "HotelProject".hotelchain_phones hcp
+                FROM hotelchain_phones hcp
                 WHERE hcp.chain_id = hc.chain_id
             ) AS phone_numbers
-        FROM "HotelProject".hotel_chains hc
+        FROM hotel_chains hc
         ORDER BY hc.chain_id;
     """
 
@@ -164,20 +165,20 @@ def db_get_chain_by_id(chain_id):
             hc.postalcode,
             (
                 SELECT COUNT(*)
-                FROM "HotelProject".hotels h
+                FROM hotels h
                 WHERE h.chain_id = hc.chain_id
             ) AS total_hotels,
             (
                 SELECT ARRAY_AGG(hce.email ORDER BY hce.email)
-                FROM "HotelProject".hotelchain_emails hce
+                FROM hotelchain_emails hce
                 WHERE hce.chain_id = hc.chain_id
             ) AS contact_emails,
             (
                 SELECT ARRAY_AGG(hcp.phone_number ORDER BY hcp.phone_number)
-                FROM "HotelProject".hotelchain_phones hcp
+                FROM hotelchain_phones hcp
                 WHERE hcp.chain_id = hc.chain_id
             ) AS phone_numbers
-        FROM "HotelProject".hotel_chains hc
+        FROM hotel_chains hc
         WHERE hc.chain_id = %s;
     """
 
@@ -242,24 +243,24 @@ def db_get_all_hotels(filters=None):
             h.manager_id,
             (
                 SELECT he.email
-                FROM "HotelProject".hotel_email he
+                FROM hotel_email he
                 WHERE he.chain_id = h.chain_id AND he.hotel_id = h.hotel_id
                 ORDER BY he.email
                 LIMIT 1
             ) AS contact_email,
             (
                 SELECT hp.phone_number
-                FROM "HotelProject".hotel_phone hp
+                FROM hotel_phone hp
                 WHERE hp.chain_id = h.chain_id AND hp.hotel_id = h.hotel_id
                 ORDER BY hp.phone_number
                 LIMIT 1
             ) AS contact_phone,
             (
                 SELECT COUNT(*)
-                FROM "HotelProject".rooms r
+                FROM rooms r
                 WHERE r.chain_id = h.chain_id AND r.hotel_id = h.hotel_id
             ) AS number_of_rooms
-        FROM "HotelProject".hotels h
+        FROM hotels h
         {where_sql}
         ORDER BY h.chain_id, h.hotel_id;
     """
@@ -293,24 +294,24 @@ def db_get_hotel_by_id(hotel_id):
             h.manager_id,
             (
                 SELECT he.email
-                FROM "HotelProject".hotel_email he
+                FROM hotel_email he
                 WHERE he.chain_id = h.chain_id AND he.hotel_id = h.hotel_id
                 ORDER BY he.email
                 LIMIT 1
             ) AS contact_email,
             (
                 SELECT hp.phone_number
-                FROM "HotelProject".hotel_phone hp
+                FROM hotel_phone hp
                 WHERE hp.chain_id = h.chain_id AND hp.hotel_id = h.hotel_id
                 ORDER BY hp.phone_number
                 LIMIT 1
             ) AS contact_phone,
             (
                 SELECT COUNT(*)
-                FROM "HotelProject".rooms r
+                FROM rooms r
                 WHERE r.chain_id = h.chain_id AND r.hotel_id = h.hotel_id
             ) AS number_of_rooms
-        FROM "HotelProject".hotels h
+        FROM hotels h
         WHERE h.hotel_id = %s;
     """
 
@@ -386,33 +387,33 @@ def db_get_all_rooms(filters=None):
             r.status,
             (
                 SELECT ARRAY_AGG(ra.amenity ORDER BY ra.amenity)
-                FROM "HotelProject".room_amenities ra
+                FROM room_amenities ra
                 WHERE ra.chain_id = r.chain_id
                   AND ra.hotel_id = r.hotel_id
                   AND ra.room_num = r.room_num
             ) AS amenities,
             EXISTS (
                 SELECT 1
-                FROM "HotelProject".room_extendible re
+                FROM room_extendible re
                 WHERE re.chain_id = r.chain_id
                   AND re.hotel_id = r.hotel_id
                   AND re.room_num = r.room_num
             ) AS is_extendable,
                         (
                                 SELECT ARRAY_AGG(re.extendible ORDER BY re.extendible)
-                                FROM "HotelProject".room_extendible re
+                                FROM room_extendible re
                                 WHERE re.chain_id = r.chain_id
                                     AND re.hotel_id = r.hotel_id
                                     AND re.room_num = r.room_num
                         ) AS extendable_with,
             (
                 SELECT ARRAY_AGG(ri.issue ORDER BY ri.issue)
-                FROM "HotelProject".room_issues ri
+                FROM room_issues ri
                 WHERE ri.chain_id = r.chain_id
                   AND ri.hotel_id = r.hotel_id
                   AND ri.room_num = r.room_num
             ) AS issues
-        FROM "HotelProject".rooms r
+        FROM rooms r
         {where_sql}
         ORDER BY r.chain_id, r.hotel_id, r.room_num;
     """
@@ -469,33 +470,33 @@ def db_get_room_by_id(room_id):
             r.status,
             (
                 SELECT ARRAY_AGG(ra.amenity ORDER BY ra.amenity)
-                FROM "HotelProject".room_amenities ra
+                FROM room_amenities ra
                 WHERE ra.chain_id = r.chain_id
                   AND ra.hotel_id = r.hotel_id
                   AND ra.room_num = r.room_num
             ) AS amenities,
             EXISTS (
                 SELECT 1
-                FROM "HotelProject".room_extendible re
+                FROM room_extendible re
                 WHERE re.chain_id = r.chain_id
                   AND re.hotel_id = r.hotel_id
                   AND re.room_num = r.room_num
             ) AS is_extendable,
                         (
                                 SELECT ARRAY_AGG(re.extendible ORDER BY re.extendible)
-                                FROM "HotelProject".room_extendible re
+                                FROM room_extendible re
                                 WHERE re.chain_id = r.chain_id
                                     AND re.hotel_id = r.hotel_id
                                     AND re.room_num = r.room_num
                         ) AS extendable_with,
             (
                 SELECT ARRAY_AGG(ri.issue ORDER BY ri.issue)
-                FROM "HotelProject".room_issues ri
+                FROM room_issues ri
                 WHERE ri.chain_id = r.chain_id
                   AND ri.hotel_id = r.hotel_id
                   AND ri.room_num = r.room_num
             ) AS issues
-        FROM "HotelProject".rooms r
+        FROM rooms r
         WHERE {where_sql}
         ORDER BY r.chain_id, r.hotel_id
         LIMIT 1;

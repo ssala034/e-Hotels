@@ -280,7 +280,7 @@ SET manager_id = e.person_id
 FROM employee e
 WHERE hotels.chain_id = e.chain_id AND hotels.hotel_id = e.hotel_id AND e.role = 'Manager';
 
--- select * from hotels;
+-- select hotels.chain_id, hotels.hotel_id, hotels.hotel_name,  from hotels join rooms using (chain_id, hotel_id);
 -- select * from hotel_chains;
 -- select * from hotels;
 
