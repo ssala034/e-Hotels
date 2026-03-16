@@ -22,7 +22,7 @@ EXECUTE FUNCTION update_count();
 
 INSERT INTO "hotels" (
     "chain_id", "hotel_name", "category", 
-    "country", "city", "region", "stree_number", "street_name", "postalcode"
+    "country", "city", "region", "street_number", "street_name", "postalcode"
 )
 VALUES (
     3,       
