@@ -17,14 +17,16 @@ export default function RegisterPage() {
   const router = useRouter();
   const { setUser } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const selectClassName =
+    'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
-    phone: '',
-    street: '',
+    streetName: '',
+    streetNumber: '',
     city: '',
     stateProvince: '',
     zipCode: '',
@@ -116,32 +118,17 @@ export default function RegisterPage() {
                   />
                 </div>
               </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    disabled={isLoading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone *</Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    placeholder="+1-555-0123"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    required
-                    disabled={isLoading}
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  disabled={isLoading}
+                />
               </div>
             </div>
 
@@ -181,16 +168,29 @@ export default function RegisterPage() {
             {/* Address */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Address</h3>
-              <div className="space-y-2">
-                <Label htmlFor="street">Street Address *</Label>
-                <Input
-                  id="street"
-                  name="street"
-                  value={formData.street}
-                  onChange={handleChange}
-                  required
-                  disabled={isLoading}
-                />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="streetNumber">Street Number *</Label>
+                  <Input
+                    id="streetNumber"
+                    name="streetNumber"
+                    value={formData.streetNumber}
+                    onChange={handleChange}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="streetName">Street Name *</Label>
+                  <Input
+                    id="streetName"
+                    name="streetName"
+                    value={formData.streetName}
+                    onChange={handleChange}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -255,7 +255,7 @@ export default function RegisterPage() {
                     onChange={handleChange}
                     required
                     disabled={isLoading}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className={selectClassName}
                   >
                     <option value="SSN">SSN</option>
                     <option value="SIN">SIN</option>

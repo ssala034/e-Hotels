@@ -2,6 +2,7 @@
 from typing import Optional
 from datetime import datetime
 from models import ChainData, HotelData, RoomData, EmployeeData, CustomerData
+import logging
 import mock_data
 from database import (
     db_get_all_chains,
@@ -10,9 +11,15 @@ from database import (
     db_get_hotel_by_id,
     db_get_all_rooms,
     db_get_room_by_id,
+    db_get_all_employees,
+    db_get_employee_by_id,
+    db_create_employee_for_manager,
+    db_get_all_customers,
+    db_get_customer_by_id,
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _find(lst, id_val):
@@ -90,11 +97,13 @@ def get_all_hotels(
     chainId: Optional[str] = Query(None),
     category: Optional[int] = Query(None),
     city: Optional[str] = Query(None),
+    managerId: Optional[int] = Query(None),
 ):
     results = db_get_all_hotels({
         "chainId": chainId,
         "category": category,
         "city": city,
+        "managerId": managerId,
     })
     return results
 
@@ -253,43 +262,35 @@ def get_all_employees(
     hotelId: Optional[str] = Query(None),
     role: Optional[str] = Query(None),
 ):
-    results = list(mock_data.employees)
-    if hotelId:
-        results = [e for e in results if e["hotelId"] == hotelId]
-    if role:
-        results = [e for e in results if e["role"] == role]
-    enriched = []
-    for emp in results:
-        hotel = _find(mock_data.hotels, emp["hotelId"])
-        enriched.append({**emp, "hotel": hotel} if hotel else emp)
-    return enriched
+    return db_get_all_employees({
+        "hotelId": hotelId,
+        "role": role,
+    })
 
 
 @router.get("/employees/{employee_id}")
 def get_employee(employee_id: str):
-    emp = _find(mock_data.employees, employee_id)
+    emp = db_get_employee_by_id(employee_id)
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
-    hotel = _find(mock_data.hotels, emp["hotelId"])
-    return {**emp, "hotel": hotel} if hotel else emp
+    return emp
 
 
 @router.post("/employees")
-def create_employee(data: EmployeeData):
-    if any(e["email"] == data.email for e in mock_data.employees):
-        raise HTTPException(status_code=400, detail="Email already exists")
-    new_emp = {
-        "id": f"emp-{len(mock_data.employees) + 100}",
-        "firstName": data.firstName,
-        "lastName": data.lastName,
-        "email": data.email,
-        "address": data.address.model_dump(),
-        "ssnSin": data.ssnSin,
-        "role": data.role,
-        "hotelId": data.hotelId,
-    }
-    mock_data.employees.append(new_emp)
-    return new_emp
+def create_employee(data: EmployeeData, managerPersonId: int = Query(..., ge=1)):
+    logger.info("POST /api/employees hit manager_person_id=%s", managerPersonId)
+    try:
+        new_emp = db_create_employee_for_manager(data.model_dump(), managerPersonId)
+        if not new_emp:
+            logger.warning("POST /api/employees unauthorized manager_person_id=%s", managerPersonId)
+            raise HTTPException(status_code=403, detail="Only a logged-in manager can create employees")
+        logger.info("POST /api/employees success person_id=%s role=%s", new_emp["personId"], new_emp["role"])
+        return new_emp
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("POST /api/employees failed manager_person_id=%s", managerPersonId)
+        raise HTTPException(status_code=400, detail=f"Could not create employee: {exc}")
 
 
 @router.put("/employees/{employee_id}")
@@ -299,14 +300,17 @@ def update_employee(employee_id: str, data: EmployeeData):
         raise HTTPException(status_code=404, detail="Employee not found")
     if any(e["email"] == data.email and e["id"] != employee_id for e in mock_data.employees):
         raise HTTPException(status_code=400, detail="Email already exists")
+    hotel = _find(mock_data.hotels, data.hotelId)
     emp.update({
         "firstName": data.firstName,
         "lastName": data.lastName,
         "email": data.email,
+        "password": data.password,
         "address": data.address.model_dump(),
         "ssnSin": data.ssnSin,
         "role": data.role,
         "hotelId": data.hotelId,
+        "chainId": data.chainId or (hotel["chainId"] if hotel else None),
     })
     return emp
 
@@ -329,23 +333,21 @@ def delete_employee(employee_id: str):
 # ============================================================================
 
 @router.get("/customers")
-def get_all_customers(searchTerm: Optional[str] = Query(None)):
-    results = list(mock_data.customers)
-    if searchTerm:
-        term = searchTerm.lower()
-        results = [
-            c for c in results
-            if term in c["firstName"].lower()
-            or term in c["lastName"].lower()
-            or term in c["email"].lower()
-            or term in c["idNumber"].lower()
-        ]
-    return results
+def get_all_customers(
+    searchTerm: Optional[str] = Query(None),
+    chainId: Optional[str] = Query(None),
+    hotelId: Optional[str] = Query(None),
+):
+    return db_get_all_customers({
+        "searchTerm": searchTerm,
+        "chainId": chainId,
+        "hotelId": hotelId,
+    })
 
 
 @router.get("/customers/{customer_id}")
 def get_customer(customer_id: str):
-    cust = _find(mock_data.customers, customer_id)
+    cust = db_get_customer_by_id(customer_id)
     if not cust:
         raise HTTPException(status_code=404, detail="Customer not found")
     return cust

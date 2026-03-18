@@ -218,48 +218,48 @@ UNION ALL
 -- Manager Employees
 -- ========================
 
-INSERT INTO person (first_name, last_name, ssn_type, ssn_number, country, city, region)
+INSERT INTO person (first_name, last_name, ssn_type, ssn_number, country, city, region, email, password)
 VALUES
-('James',   'Anderson',  'SSN', 'SSN-001', 'Canada', 'Ottawa',      'Ontario'),
-('Emily',   'Thompson',  'SSN', 'SSN-002', 'Canada', 'Ottawa',      'Ontario'),
-('Michael', 'Harris',    'SSN', 'SSN-003', 'Canada', 'Ottawa',      'Ontario'),
-('Sarah',   'Martin',    'SSN', 'SSN-004', 'Canada', 'Ottawa',      'Ontario'),
-('David',   'Wilson',    'SSN', 'SSN-005', 'Canada', 'Vancouver',   'BC'),
-('Laura',   'Garcia',    'SSN', 'SSN-006', 'Canada', 'Calgary',     'Alberta'),
-('Daniel',  'Martinez',  'SSN', 'SSN-007', 'Canada', 'Halifax',     'NS'),
-('Sophia',  'Robinson',  'SSN', 'SSN-008', 'Canada', 'Ottawa',      'Ontario'),
-('Chris',   'Clark',     'SSN', 'SSN-009', 'USA',    'Miami',       'Florida'),
-('Olivia',  'Lewis',     'SSN', 'SSN-010', 'USA',    'Miami',       'Florida'),
-('Ethan',   'Lee',       'SSN', 'SSN-011', 'USA',    'Key West',    'Florida'),
-('Ava',     'Walker',    'SSN', 'SSN-012', 'USA',    'Orlando',     'Florida'),
-('Noah',    'Hall',      'SSN', 'SSN-013', 'USA',    'Tampa',       'Florida'),
-('Mia',     'Allen',     'SSN', 'SSN-014', 'USA',    'New York',    'New York'),
-('Liam',    'Young',     'SSN', 'SSN-015', 'USA',    'Los Angeles', 'California'),
-('Emma',    'Hernandez', 'SSN', 'SSN-016', 'USA',    'Chicago',     'Illinois'),
-('Oliver',  'King',      'SSN', 'SSN-017', 'Canada', 'Toronto',     'Ontario'),
-('Amelia',  'Wright',    'SSN', 'SSN-018', 'Canada', 'Toronto',     'Ontario'),
-('Lucas',   'Scott',     'SSN', 'SSN-019', 'Canada', 'Toronto',     'Ontario'),
-('Harper',  'Torres',    'SSN', 'SSN-020', 'Canada', 'Toronto',     'Ontario'),
-('Mason',   'Nguyen',    'SSN', 'SSN-021', 'Canada', 'Toronto',     'Ontario'),
-('Ella',    'Hill',      'SSN', 'SSN-022', 'Canada', 'Toronto',     'Ontario'),
-('Logan',   'Flores',    'SSN', 'SSN-023', 'Canada', 'Toronto',     'Ontario'),
-('Avery',   'Green',     'SSN', 'SSN-024', 'Canada', 'Toronto',     'Ontario'),
-('Elijah',  'Adams',     'SSN', 'SSN-025', 'France', 'Paris',       'IDF'),
-('Scarlett','Baker',     'SSN', 'SSN-026', 'France', 'Paris',       'IDF'),
-('James',   'Gonzalez',  'SSN', 'SSN-027', 'France', 'Lyon',        'Auvergne'),
-('Grace',   'Nelson',    'SSN', 'SSN-028', 'France', 'Nice',        'PAC'),
-('Henry',   'Carter',    'SSN', 'SSN-029', 'France', 'Marseille',   'PAC'),
-('Zoe',     'Mitchell',  'SSN', 'SSN-030', 'France', 'Bordeaux',    'Nouvelle'),
-('Jack',    'Perez',     'SSN', 'SSN-031', 'France', 'Lille',       'Hauts'),
-('Lily',    'Roberts',   'SSN', 'SSN-032', 'France', 'Strasbourg',  'Grand Est'),
-('Owen',    'Turner',    'SSN', 'SSN-033', 'UK',     'London',      'London'),
-('Chloe',   'Phillips',  'SSN', 'SSN-034', 'UK',     'London',      'London'),
-('Ryan',    'Campbell',  'SSN', 'SSN-035', 'UK',     'Manchester',  'Lancs'),
-('Nora',    'Parker',    'SSN', 'SSN-036', 'UK',     'Edinburgh',   'Manchester'),
-('Leo',     'Evans',     'SSN', 'SSN-037', 'UK',     'Glasgow',     'London'),
-('Hannah',  'Edwards',   'SSN', 'SSN-038', 'UK',     'Liverpool',   'London'),
-('Isaac',   'Collins',   'SSN', 'SSN-039', 'UK',     'Birmingham',  'Manchester'),
-('Aria',    'Stewart',   'SSN', 'SSN-040', 'UK',     'Bristol',     'London');
+('James',   'Anderson',  'SSN', 'SSN-001', 'Canada', 'Ottawa',      'Ontario', 'james.anderson@hotels.com',  'y5naMM4@7hD|'),
+('Emily',   'Thompson',  'SSN', 'SSN-002', 'Canada', 'Ottawa',      'Ontario', 'emily.thompson@hotels.com', 'T8k#P2zLm9Q!'),
+('Michael', 'Harris',    'SSN', 'SSN-003', 'Canada', 'Ottawa',      'Ontario', 'michael.harris@hotels.com', 'R4v$Xn7@cL2p'),
+('Sarah',   'Martin',    'SSN', 'SSN-004', 'Canada', 'Ottawa',      'Ontario', 'sarah.martin@hotels.com',   'Q9!dF6wZx3@T'),
+('David',   'Wilson',    'SSN', 'SSN-005', 'Canada', 'Vancouver',   'BC',      'david.wilson@hotels.com',   'mE7@Lp2#Xz8K'),
+('Laura',   'Garcia',    'SSN', 'SSN-006', 'Canada', 'Calgary',     'Alberta', 'laura.garcia@hotels.com',   'B5^kW9!qT3yP'),
+('Daniel',  'Martinez',  'SSN', 'SSN-007', 'Canada', 'Halifax',     'NS',      'daniel.martinez@hotels.com','Z2@xCv8!Lm4R'),
+('Sophia',  'Robinson',  'SSN', 'SSN-008', 'Canada', 'Ottawa',      'Ontario', 'sophia.robinson@hotels.com','N7!pQ4@tYx6A'),
+('Chris',   'Clark',     'SSN', 'SSN-009', 'USA',    'Miami',       'Florida', 'chris.clark@hotels.com',    'K3@Lm8!pXz1D'),
+('Olivia',  'Lewis',     'SSN', 'SSN-010', 'USA',    'Miami',       'Florida', 'olivia.lewis@hotels.com',   'P9!zT2xWq7@B'),
+('Ethan',   'Lee',       'SSN', 'SSN-011', 'USA',    'Key West',    'Florida', 'ethan.lee@hotels.com',      'X5@cN8!Lm2Qv'),
+('Ava',     'Walker',    'SSN', 'SSN-012', 'USA',    'Orlando',     'Florida', 'ava.walker@hotels.com',     'D7!rT3@Zx9Lp'),
+('Noah',    'Hall',      'SSN', 'SSN-013', 'USA',    'Tampa',       'Florida', 'noah.hall@hotels.com',      'J4@pLm8!Qx2C'),
+('Mia',     'Allen',     'SSN', 'SSN-014', 'USA',    'New York',    'New York','mia.allen@hotels.com',      'F2!Zx7@Wp9Lt'),
+('Liam',    'Young',     'SSN', 'SSN-015', 'USA',    'Los Angeles', 'California','liam.young@hotels.com',  'A8@Lm3!xQp6D'),
+('Emma',    'Hernandez', 'SSN', 'SSN-016', 'USA',    'Chicago',     'Illinois','emma.hernandez@hotels.com', 'T1!xZ9@Lp4Qv'),
+('Oliver',  'King',      'SSN', 'SSN-017', 'Canada', 'Toronto',     'Ontario', 'oliver.king@hotels.com',    'M6@pX2!qZ8Lt'),
+('Amelia',  'Wright',    'SSN', 'SSN-018', 'Canada', 'Toronto',     'Ontario', 'amelia.wright@hotels.com',  'Q3!Lm7@Xp9Zt'),
+('Lucas',   'Scott',     'SSN', 'SSN-019', 'Canada', 'Toronto',     'Ontario', 'lucas.scott@hotels.com',    'V9@xT2!Lm5Qp'),
+('Harper',  'Torres',    'SSN', 'SSN-020', 'Canada', 'Toronto',     'Ontario', 'harper.torres@hotels.com',  'Z4!pLm8@Xq2D'),
+('Mason',   'Nguyen',    'SSN', 'SSN-021', 'Canada', 'Toronto',     'Ontario', 'mason.nguyen@hotels.com',   'C7@T3!Zx9Lp'),
+('Ella',    'Hill',      'SSN', 'SSN-022', 'Canada', 'Toronto',     'Ontario', 'ella.hill@hotels.com',      'P2!Lm8@xQ7Zv'),
+('Logan',   'Flores',    'SSN', 'SSN-023', 'Canada', 'Toronto',     'Ontario', 'logan.flores@hotels.com',   'Y5@Zx3!Lp8Qt'),
+('Avery',   'Green',     'SSN', 'SSN-024', 'Canada', 'Toronto',     'Ontario', 'avery.green@hotels.com',    'W9!Lm2@Xp7Zq'),
+('Elijah',  'Adams',     'SSN', 'SSN-025', 'France', 'Paris',       'IDF',     'elijah.adams@hotels.com',   'R8@xT3!Lm6Qp'),
+('Scarlett','Baker',     'SSN', 'SSN-026', 'France', 'Paris',       'IDF',     'scarlett.baker@hotels.com', 'N4!Zx9@Lp2Qt'),
+('James',   'Gonzalez',  'SSN', 'SSN-027', 'France', 'Lyon',        'Auvergne','james.gonzalez@hotels.com', 'U7@Lm5!xQ2Zp'),
+('Grace',   'Nelson',    'SSN', 'SSN-028', 'France', 'Nice',        'PAC',     'grace.nelson@hotels.com',   'K3!pZx8@Lm9Qt'),
+('Henry',   'Carter',    'SSN', 'SSN-029', 'France', 'Marseille',   'PAC',     'henry.carter@hotels.com',   'L9@T2!Zx7MpQ'),
+('Zoe',     'Mitchell',  'SSN', 'SSN-030', 'France', 'Bordeaux',    'Nouvelle','zoe.mitchell@hotels.com',   'E6!Lm3@Xp8Zt'),
+('Jack',    'Perez',     'SSN', 'SSN-031', 'France', 'Lille',       'Hauts',   'jack.perez@hotels.com',     'S2@Zx7!Lm5Qp'),
+('Lily',    'Roberts',   'SSN', 'SSN-032', 'France', 'Strasbourg',  'Grand Est','lily.roberts@hotels.com', 'D8!Lp2@Zx9Qt'),
+('Owen',    'Turner',    'SSN', 'SSN-033', 'UK',     'London',      'London',  'owen.turner@hotels.com',    'H3@Lm7!xQ5Zp'),
+('Chloe',   'Phillips',  'SSN', 'SSN-034', 'UK',     'London',      'London',  'chloe.phillips@hotels.com', 'J9!Zx2@Lp8Qt'),
+('Ryan',    'Campbell',  'SSN', 'SSN-035', 'UK',     'Manchester',  'Lancs',   'ryan.campbell@hotels.com',  'G5@Lm3!Xp7Zt'),
+('Nora',    'Parker',    'SSN', 'SSN-036', 'UK',     'Edinburgh',   'Manchester','nora.parker@hotels.com', 'T2!Zx8@Lm4Qp'),
+('Leo',     'Evans',     'SSN', 'SSN-037', 'UK',     'Glasgow',     'London',  'leo.evans@hotels.com',      'Q7@Lp9!Zx3Mt'),
+('Hannah',  'Edwards',   'SSN', 'SSN-038', 'UK',     'Liverpool',   'London',  'hannah.edwards@hotels.com', 'M4!Lm2@Xp8Zq'),
+('Isaac',   'Collins',   'SSN', 'SSN-039', 'UK',     'Birmingham',  'Manchester','isaac.collins@hotels.com','P8@Zx3!Lm7Qt'),
+('Aria',    'Stewart',   'SSN', 'SSN-040', 'UK',     'Bristol',     'London',  'aria.stewart@hotels.com',   'X2!Lm9@Zp5Qt');
 
 
 INSERT INTO employee (person_id, chain_id, hotel_id, role)
@@ -282,7 +282,7 @@ WHERE hotels.chain_id = e.chain_id AND hotels.hotel_id = e.hotel_id AND e.role =
 
 -- select hotels.chain_id, hotels.hotel_id, hotels.hotel_name,  from hotels join rooms using (chain_id, hotel_id);
 -- select * from hotel_chains;
--- select * from hotels;
+--select chain_id, hotel_id, hotel_name, person.person_id, person.email, person.password from hotels join person on hotels.manager_id = person.person_id;
 
 
 

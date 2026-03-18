@@ -23,12 +23,18 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      const loggedInUser = await login(email, password);
       toast({
         title: 'Welcome back!',
         description: 'You have successfully logged in.',
       });
-      router.push('/');
+      if (loggedInUser.role === 'Admin') {
+        router.push('/admin');
+      } else if (loggedInUser.role === 'Employee') {
+        router.push('/employee/dashboard');
+      } else {
+        router.push('/profile');
+      }
     } catch (error) {
       toast({
         title: 'Login failed',
@@ -79,9 +85,8 @@ export default function LoginPage() {
             </div>
             <div className="text-sm text-muted-foreground">
               <p className="mb-2">Demo accounts:</p>
-              <p>• Admin: admin@ehotels.com / admin123</p>
-              <p>• Employee: Use any employee email</p>
-              <p>• Customer: Use any registered email</p>
+              <p>• Employee: existing employee email/password in your DB</p>
+              <p>• Customer: existing customer email/password in your DB</p>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">

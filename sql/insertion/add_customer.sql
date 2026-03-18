@@ -2,10 +2,10 @@ SET search_path TO "HotelProject";
 
 WITH new_person AS (
     INSERT INTO person (
-        first_name, last_name, ssn_type, ssn_number, country, city, region, street_name, street_number, postalcode
+        first_name, last_name, ssn_type, ssn_number, country, city, region, street_name, street_number, postalcode, email, password
     )
     VALUES('Michael', 'Smith', 'SIN', '300-348-238', 
-        'Canada', 'Ottawa', 'Ontario', 'Laurier Ave E', 75, 'K1N6N5')
+        'Canada', 'Ottawa', 'Ontario', 'Laurier Ave E', 75, 'K1N6N5', 'michael.smith@hotels.com', 'password123')
     
     RETURNING person_id
 )

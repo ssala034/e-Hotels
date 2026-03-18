@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  getAllChains,
+  getChainById,
   getAllHotels,
   getAllRooms,
   getAllEmployees,
@@ -23,7 +23,7 @@ import {
   deleteEmployee,
   deleteCustomer,
 } from '@/lib/api';
-import { HotelChain, Hotel, Room, Employee, Customer } from '@/types';
+import { HotelChain, Hotel, Room, Employee, Customer, EmployeeRole, IDType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,6 +39,8 @@ type ModalMode = 'create' | 'edit' | null;
 export default function AdminDashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const selectClassName =
+    'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
   const [activeTab, setActiveTab] = useState<TabType>('chains');
   const [isLoading, setIsLoading] = useState(true);
@@ -87,18 +89,17 @@ export default function AdminDashboardPage() {
   });
 
   const [employeeForm, setEmployeeForm] = useState({
-    hotelId: '',
     firstName: '',
     lastName: '',
     email: '',
     password: '',
-    role: 'Employee' as 'Employee',
+    role: 'Receptionist' as EmployeeRole,
     street: '',
     city: '',
     stateProvince: '',
     zipCode: '',
     country: 'USA',
-    idType: 'SSN' as any,
+    idType: 'SSN' as IDType,
     idNumber: '',
   });
 
@@ -108,17 +109,27 @@ export default function AdminDashboardPage() {
       return;
     }
     loadData();
-  }, [user]);
+  }, [user?.id, user?.chainId, user?.hotelId, user?.role]);
 
   const loadData = async () => {
+    if (!user) return;
+
     setIsLoading(true);
     try {
+      const managerChainId = user.chainId;
+      const managerHotelId = user.hotelId;
+      const managerPersonId = user.personId;
+
+      if (!managerChainId || !managerHotelId || !managerPersonId) {
+        throw new Error('Manager scope is missing chain/hotel assignment');
+      }
+
       const [chainsData, hotelsData, roomsData, employeesData, customersData] = await Promise.all([
-        getAllChains(),
-        getAllHotels(),
-        getAllRooms(),
-        getAllEmployees(),
-        getAllCustomers(),
+        getChainById(managerChainId).then((chain) => (chain ? [chain] : [])),
+        getAllHotels({ managerId: managerPersonId }),
+        getAllRooms({ hotelId: managerHotelId }),
+        getAllEmployees({ hotelId: managerHotelId }),
+        getAllCustomers({ chainId: managerChainId, hotelId: managerHotelId }),
       ]);
       setChains(chainsData);
       setHotels(hotelsData);
@@ -128,7 +139,7 @@ export default function AdminDashboardPage() {
     } catch (error) {
       toast({
         title: 'Error loading data',
-        description: 'Could not load dashboard data',
+        description: error instanceof Error ? error.message : 'Could not load dashboard data',
         variant: 'destructive',
       });
     } finally {
@@ -268,15 +279,20 @@ export default function AdminDashboardPage() {
   // Employee Handlers
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user?.personId) {
+      toast({ title: 'Error', description: 'Manager session is missing context', variant: 'destructive' });
+      return;
+    }
+
     try {
       await createEmployee({
         firstName: employeeForm.firstName,
         lastName: employeeForm.lastName,
         email: employeeForm.email,
-        password: 'employee123', // Default password
-        hotelId: employeeForm.hotelId,
-        role: employeeForm.role as any,
+        password: employeeForm.password,
+        role: employeeForm.role,
         ssnSin: employeeForm.idNumber,
+        idType: employeeForm.idType,
         address: {
           street: employeeForm.street,
           city: employeeForm.city,
@@ -284,7 +300,7 @@ export default function AdminDashboardPage() {
           zipCode: employeeForm.zipCode,
           country: employeeForm.country,
         },
-      });
+      }, user.personId);
       toast({ title: 'Employee created successfully' });
       setModalMode(null);
       loadData();
@@ -445,7 +461,7 @@ export default function AdminDashboardPage() {
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                           <Label>Hotel Chain</Label>
-                          <select value={hotelForm.chainId} onChange={(e) => setHotelForm({ ...hotelForm, chainId: e.target.value })} required className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
+                          <select value={hotelForm.chainId} onChange={(e) => setHotelForm({ ...hotelForm, chainId: e.target.value })} required className={selectClassName}>
                             <option value="">Select chain</option>
                             {chains.map((chain) => <option key={chain.id} value={chain.id}>{chain.name}</option>)}
                           </select>
@@ -538,7 +554,7 @@ export default function AdminDashboardPage() {
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                           <Label>Hotel</Label>
-                          <select value={roomForm.hotelId} onChange={(e) => setRoomForm({ ...roomForm, hotelId: e.target.value })} required className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
+                          <select value={roomForm.hotelId} onChange={(e) => setRoomForm({ ...roomForm, hotelId: e.target.value })} required className={selectClassName}>
                             <option value="">Select hotel</option>
                             {hotels.map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}
                           </select>
@@ -626,7 +642,23 @@ export default function AdminDashboardPage() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">Employees</h2>
-                <Button onClick={() => setModalMode('create')}>
+                <Button onClick={() => {
+                  setModalMode('create');
+                  setEmployeeForm({
+                    firstName: '',
+                    lastName: '',
+                    email: '',
+                    password: '',
+                    role: 'Receptionist' as EmployeeRole,
+                    street: '',
+                    city: '',
+                    stateProvince: '',
+                    zipCode: '',
+                    country: 'USA',
+                    idType: 'SSN' as IDType,
+                    idNumber: '',
+                  });
+                }}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Employee
                 </Button>
@@ -653,13 +685,97 @@ export default function AdminDashboardPage() {
                           <Input type="email" value={employeeForm.email} onChange={(e) => setEmployeeForm({ ...employeeForm, email: e.target.value })} required />
                         </div>
                         <div className="space-y-2">
-                          <Label>Hotel</Label>
-                          <select value={employeeForm.hotelId} onChange={(e) => setEmployeeForm({ ...employeeForm, hotelId: e.target.value })} required className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
-                            <option value="">Select hotel</option>
-                            {hotels.map((hotel) => <option key={hotel.id} value={hotel.id}>{hotel.name}</option>)}
+                          <Label>Password</Label>
+                          <Input
+                            type="password"
+                            value={employeeForm.password}
+                            onChange={(e) => setEmployeeForm({ ...employeeForm, password: e.target.value })}
+                            minLength={8}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Role</Label>
+                          <select
+                            value={employeeForm.role}
+                            onChange={(e) => setEmployeeForm({ ...employeeForm, role: e.target.value as EmployeeRole })}
+                            required
+                            className={selectClassName}
+                          >
+                            <option value="Manager">Manager</option>
+                            <option value="Receptionist">Receptionist</option>
+                            <option value="Housekeeping">Housekeeping</option>
+                            <option value="Maintenance">Maintenance</option>
+                            <option value="Concierge">Concierge</option>
                           </select>
                         </div>
+                        <div className="space-y-2">
+                          <Label>ID Type</Label>
+                          <select
+                            value={employeeForm.idType}
+                            onChange={(e) => setEmployeeForm({ ...employeeForm, idType: e.target.value as IDType })}
+                            required
+                            className={selectClassName}
+                          >
+                            <option value="SSN">SSN</option>
+                            <option value="SIN">SIN</option>
+                            <option value="Driver License">Driver License</option>
+                            <option value="Passport">Passport</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>ID Number</Label>
+                          <Input
+                            value={employeeForm.idNumber}
+                            onChange={(e) => setEmployeeForm({ ...employeeForm, idNumber: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Street</Label>
+                          <Input
+                            value={employeeForm.street}
+                            onChange={(e) => setEmployeeForm({ ...employeeForm, street: e.target.value })}
+                            placeholder="123 Laurier Ave E"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>City</Label>
+                          <Input
+                            value={employeeForm.city}
+                            onChange={(e) => setEmployeeForm({ ...employeeForm, city: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>State/Province</Label>
+                          <Input
+                            value={employeeForm.stateProvince}
+                            onChange={(e) => setEmployeeForm({ ...employeeForm, stateProvince: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>ZIP/Postal Code</Label>
+                          <Input
+                            value={employeeForm.zipCode}
+                            onChange={(e) => setEmployeeForm({ ...employeeForm, zipCode: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Country</Label>
+                          <Input
+                            value={employeeForm.country}
+                            onChange={(e) => setEmployeeForm({ ...employeeForm, country: e.target.value })}
+                            required
+                          />
+                        </div>
                       </div>
+                      <p className="text-sm text-muted-foreground">
+                        New employee will be assigned to your managed property ({user?.chainId || 'N/A'} / {user?.hotelId || 'N/A'}).
+                      </p>
                       <div className="flex gap-2">
                         <Button type="submit">Create Employee</Button>
                         <Button type="button" variant="outline" onClick={() => setModalMode(null)}>Cancel</Button>

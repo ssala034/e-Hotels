@@ -7,7 +7,7 @@ import { login as apiLogin, logout as apiLogout } from '@/lib/api';
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
 }
@@ -30,12 +30,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User> => {
     try {
       const response = await apiLogin(email, password);
       setUser(response.user);
       localStorage.setItem('user', JSON.stringify(response.user));
       localStorage.setItem('token', response.token);
+      return response.user;
     } catch (error) {
       console.error('Login failed:', error);
       throw error;

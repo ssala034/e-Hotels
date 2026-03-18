@@ -1,8 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 from config import FRONTEND_URL, BACKEND_PORT
 from routers import auth, search, bookings, rentings, payments, admin
 from database import get_connection
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
 
 app = FastAPI(title="e-Hotels API")
 

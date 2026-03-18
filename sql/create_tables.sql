@@ -51,8 +51,12 @@ CREATE TABLE IF NOT EXISTS person (
     street_name     VARCHAR(30),
     street_number   SMALLINT,
     postalcode      VARCHAR(10),
+    email           VARCHAR(35) NOT NULL,
+    password        VARCHAR(20) NOT NULL,
     PRIMARY KEY (person_id),
     UNIQUE (ssn_number, ssn_type),
+    UNIQUE (email),
+    UNIQUE (password),
     CHECK (ssn_type IN ('SSN', 'SIN', 'Drivers License', 'Passport'))
 );
 

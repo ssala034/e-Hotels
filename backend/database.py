@@ -3,6 +3,76 @@ from psycopg2.extras import RealDictCursor
 from config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
 
 
+def _normalize_id_type(id_type):
+    if not id_type:
+        return "SSN"
+    if id_type == "Driver License":
+        return "Drivers License"
+    return id_type
+
+
+def _display_id_type(id_type):
+    if id_type == "Drivers License":
+        return "Driver License"
+    return id_type
+
+
+def _split_street(street):
+    if not street:
+        return None, ""
+    text = str(street).strip()
+    if not text:
+        return None, ""
+    first, *rest = text.split(" ", 1)
+    street_number = None
+    street_name = text
+    if first.isdigit():
+        street_number = int(first)
+        street_name = rest[0].strip() if rest else ""
+    return street_number, street_name
+
+
+def _map_employee_row(row):
+    return {
+        "id": f"emp-{row['person_id']}",
+        "personId": row["person_id"],
+        "firstName": row["first_name"],
+        "lastName": row["last_name"],
+        "email": row["email"],
+        "address": {
+            "street": f"{row['street_number']} {row['street_name']}".strip(),
+            "city": row["city"],
+            "stateProvince": row["region"],
+            "zipCode": row["postalcode"],
+            "country": row["country"],
+        },
+        "ssnSin": row["ssn_number"],
+        "role": row["role"],
+        "hotelId": f"hotel-{row['hotel_id']}",
+        "chainId": f"chain-{row['chain_id']}",
+    }
+
+
+def _map_customer_row(row):
+    return {
+        "id": f"cust-{row['person_id']}",
+        "personId": row["person_id"],
+        "firstName": row["first_name"],
+        "lastName": row["last_name"],
+        "email": row["email"],
+        "phone": "",
+        "address": {
+            "street": f"{row['street_number']} {row['street_name']}".strip(),
+            "city": row["city"],
+            "stateProvince": row["region"],
+            "zipCode": row["postalcode"],
+            "country": row["country"],
+        },
+        "idType": _display_id_type(row["ssn_type"]),
+        "idNumber": row["ssn_number"],
+        "registrationDate": row["register_date"].isoformat(),
+    }
+
 def get_connection():
     """Get a connection to the PostgreSQL database."""
     conn = psycopg2.connect(
@@ -17,7 +87,6 @@ def get_connection():
     with conn.cursor() as cur:
         cur.execute('SET search_path TO "HotelProject", public;')
     return conn
-
 
 def _extract_numeric_id(value):
     """Accept plain numeric IDs or prefixed IDs like 'hotel-12'."""
@@ -225,6 +294,11 @@ def db_get_all_hotels(filters=None):
     if city:
         where_clauses.append("LOWER(h.city) = LOWER(%s)")
         params.append(city)
+
+    manager_id = _extract_numeric_id(filters.get("managerId"))
+    if manager_id is not None:
+        where_clauses.append("h.manager_id = %s")
+        params.append(manager_id)
 
     where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
@@ -524,19 +598,322 @@ def db_delete_room(room_id):
     pass
 
 
+# --- Authentication ---
+
+def db_get_user_by_credentials(email, password):
+    query = """
+        SELECT
+            p.person_id,
+            p.first_name,
+            p.last_name,
+            p.email,
+            p.country,
+            p.city,
+            p.region,
+            p.street_name,
+            p.street_number,
+            p.postalcode,
+            e.role AS employee_role,
+            e.chain_id,
+            e.hotel_id,
+            c.person_id AS customer_person_id
+        FROM person p
+        LEFT JOIN employee e ON e.person_id = p.person_id
+        LEFT JOIN customer c ON c.person_id = p.person_id
+        WHERE LOWER(p.email) = LOWER(%s) AND p.password = %s
+        LIMIT 1;
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, (email, password))
+            row = cur.fetchone()
+            if not row:
+                return None
+
+            base_user = {
+                "personId": row["person_id"],
+                "firstName": row["first_name"],
+                "lastName": row["last_name"],
+                "email": row["email"],
+                "address": {
+                    "street": f"{row['street_number']} {row['street_name']}".strip(),
+                    "city": row["city"],
+                    "stateProvince": row["region"],
+                    "zipCode": row["postalcode"],
+                    "country": row["country"],
+                },
+            }
+
+            if row["employee_role"]:
+                is_manager = row["employee_role"] == "Manager"
+                return {
+                    **base_user,
+                    "id": f"emp-{row['person_id']}",
+                    "role": "Admin" if is_manager else "Employee",
+                    "employeeRole": row["employee_role"],
+                    "employeeId": f"emp-{row['person_id']}",
+                    "chainId": f"chain-{row['chain_id']}",
+                    "hotelId": f"hotel-{row['hotel_id']}",
+                }
+
+            if row["customer_person_id"]:
+                return {
+                    **base_user,
+                    "id": f"cust-{row['person_id']}",
+                    "role": "Customer",
+                    "customerId": f"cust-{row['person_id']}",
+                }
+
+            return None
+    finally:
+        conn.close()
+
+
+def db_create_customer_account(data):
+    insert_person_query = """
+        INSERT INTO person (
+            first_name,
+            last_name,
+            ssn_type,
+            ssn_number,
+            country,
+            city,
+            region,
+            street_name,
+            street_number,
+            postalcode,
+            email,
+            password
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING person_id;
+    """
+    insert_customer_query = """
+        INSERT INTO customer (person_id, register_date)
+        VALUES (%s, CURRENT_DATE);
+    """
+
+    street_number = _extract_numeric_id(data.get("streetNumber"))
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                insert_person_query,
+                (
+                    data["firstName"],
+                    data["lastName"],
+                    _normalize_id_type(data["idType"]),
+                    data["idNumber"],
+                    data["country"],
+                    data["city"],
+                    data["stateProvince"],
+                    data["streetName"],
+                    street_number,
+                    data["zipCode"],
+                    data["email"],
+                    data["password"],
+                ),
+            )
+            person_id = cur.fetchone()["person_id"]
+            cur.execute(insert_customer_query, (person_id,))
+
+        conn.commit()
+        return {
+            "id": f"cust-{person_id}",
+            "personId": person_id,
+            "email": data["email"],
+            "role": "Customer",
+            "firstName": data["firstName"],
+            "lastName": data["lastName"],
+            "customerId": f"cust-{person_id}",
+            "address": {
+                "street": f"{street_number or ''} {data['streetName']}".strip(),
+                "city": data["city"],
+                "stateProvince": data["stateProvince"],
+                "zipCode": data["zipCode"],
+                "country": data["country"],
+            },
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def db_create_employee_for_manager(data, manager_person_id):
+    manager_query = """
+        SELECT chain_id, hotel_id
+        FROM employee
+        WHERE person_id = %s AND role = 'Manager'
+        LIMIT 1;
+    """
+    insert_person_query = """
+        INSERT INTO person (
+            first_name,
+            last_name,
+            ssn_type,
+            ssn_number,
+            country,
+            city,
+            region,
+            street_name,
+            street_number,
+            postalcode,
+            email,
+            password
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING person_id;
+    """
+    insert_employee_query = """
+        INSERT INTO employee (person_id, chain_id, hotel_id, role)
+        VALUES (%s, %s, %s, %s);
+    """
+
+    street_number, street_name = _split_street(data["address"].get("street"))
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(manager_query, (manager_person_id,))
+            manager_assignment = cur.fetchone()
+            if not manager_assignment:
+                return None
+
+            cur.execute(
+                insert_person_query,
+                (
+                    data["firstName"],
+                    data["lastName"],
+                    _normalize_id_type(data.get("idType", "SSN")),
+                    data["ssnSin"],
+                    data["address"]["country"],
+                    data["address"]["city"],
+                    data["address"]["stateProvince"],
+                    street_name,
+                    street_number,
+                    data["address"]["zipCode"],
+                    data["email"],
+                    data["password"],
+                ),
+            )
+            person_id = cur.fetchone()["person_id"]
+
+            cur.execute(
+                insert_employee_query,
+                (
+                    person_id,
+                    manager_assignment["chain_id"],
+                    manager_assignment["hotel_id"],
+                    data["role"],
+                ),
+            )
+
+        conn.commit()
+        return {
+            "id": f"emp-{person_id}",
+            "personId": person_id,
+            "firstName": data["firstName"],
+            "lastName": data["lastName"],
+            "email": data["email"],
+            "address": data["address"],
+            "ssnSin": data["ssnSin"],
+            "role": data["role"],
+            "hotelId": f"hotel-{manager_assignment['hotel_id']}",
+            "chainId": f"chain-{manager_assignment['chain_id']}",
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 # --- Employees ---
 
 def db_get_all_employees(filters=None):
-    # query = "SELECT * FROM employee WHERE ..."
-    pass
+    filters = filters or {}
+    where_clauses = []
+    params = []
+
+    hotel_id = _extract_numeric_id(filters.get("hotelId"))
+    if hotel_id is not None:
+        where_clauses.append("e.hotel_id = %s")
+        params.append(hotel_id)
+
+    role = filters.get("role")
+    if role:
+        where_clauses.append("e.role = %s")
+        params.append(role)
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    query = f"""
+        SELECT
+            p.person_id,
+            p.first_name,
+            p.last_name,
+            p.email,
+            p.country,
+            p.city,
+            p.region,
+            p.street_name,
+            p.street_number,
+            p.postalcode,
+            p.ssn_number,
+            e.chain_id,
+            e.hotel_id,
+            e.role
+        FROM employee e
+        JOIN person p ON p.person_id = e.person_id
+        {where_sql}
+        ORDER BY p.person_id;
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, tuple(params))
+            return [_map_employee_row(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
 
 def db_get_employee_by_id(employee_id):
-    # query = "SELECT * FROM employee WHERE id = %s"
-    pass
+    person_id = _extract_numeric_id(employee_id)
+    if person_id is None:
+        return None
 
-def db_create_employee(data):
-    # query = "INSERT INTO employee (...) VALUES (...) RETURNING *"
-    pass
+    query = """
+        SELECT
+            p.person_id,
+            p.first_name,
+            p.last_name,
+            p.email,
+            p.country,
+            p.city,
+            p.region,
+            p.street_name,
+            p.street_number,
+            p.postalcode,
+            p.ssn_number,
+            e.chain_id,
+            e.hotel_id,
+            e.role
+        FROM employee e
+        JOIN person p ON p.person_id = e.person_id
+        WHERE e.person_id = %s
+        LIMIT 1;
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, (person_id,))
+            row = cur.fetchone()
+            return _map_employee_row(row) if row else None
+    finally:
+        conn.close()
 
 def db_update_employee(employee_id, data):
     # query = "UPDATE employee SET ... WHERE id = %s RETURNING *"
@@ -550,16 +927,124 @@ def db_delete_employee(employee_id):
 # --- Customers ---
 
 def db_get_all_customers(filters=None):
-    # query = "SELECT * FROM customer WHERE ..."
-    pass
+    filters = filters or {}
+    search_term = (filters.get("searchTerm") or "").strip().lower()
+    chain_id = _extract_numeric_id(filters.get("chainId"))
+    hotel_id = _extract_numeric_id(filters.get("hotelId"))
+
+    query = """
+        SELECT
+            p.person_id,
+            p.first_name,
+            p.last_name,
+            p.email,
+            p.country,
+            p.city,
+            p.region,
+            p.street_name,
+            p.street_number,
+            p.postalcode,
+            p.ssn_type,
+            p.ssn_number,
+            c.register_date
+        FROM customer c
+        JOIN person p ON p.person_id = c.person_id
+        WHERE (
+            %s = ''
+            OR LOWER(p.first_name) LIKE %s
+            OR LOWER(p.last_name) LIKE %s
+            OR LOWER(p.email) LIKE %s
+            OR LOWER(p.ssn_number) LIKE %s
+        )
+        AND (
+            (%s IS NULL AND %s IS NULL)
+            OR EXISTS (
+                SELECT 1
+                FROM hotel_reservation hr
+                WHERE hr.person_id = c.person_id
+                    AND (%s IS NULL OR hr.chain_id = %s)
+                    AND (%s IS NULL OR hr.hotel_id = %s)
+            )
+        )
+        ORDER BY p.person_id;
+    """
+
+    like_value = f"%{search_term}%"
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                query,
+                (
+                    search_term,
+                    like_value,
+                    like_value,
+                    like_value,
+                    like_value,
+                    chain_id,
+                    hotel_id,
+                    chain_id,
+                    chain_id,
+                    hotel_id,
+                    hotel_id,
+                ),
+            )
+            return [_map_customer_row(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
 
 def db_get_customer_by_id(customer_id):
-    # query = "SELECT * FROM customer WHERE id = %s"
-    pass
+    person_id = _extract_numeric_id(customer_id)
+    if person_id is None:
+        return None
+
+    query = """
+        SELECT
+            p.person_id,
+            p.first_name,
+            p.last_name,
+            p.email,
+            p.country,
+            p.city,
+            p.region,
+            p.street_name,
+            p.street_number,
+            p.postalcode,
+            p.ssn_type,
+            p.ssn_number,
+            c.register_date
+        FROM customer c
+        JOIN person p ON p.person_id = c.person_id
+        WHERE c.person_id = %s
+        LIMIT 1;
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, (person_id,))
+            row = cur.fetchone()
+            return _map_customer_row(row) if row else None
+    finally:
+        conn.close()
 
 def db_create_customer(data):
-    # query = "INSERT INTO customer (...) VALUES (...) RETURNING *"
-    pass
+    return db_create_customer_account(
+        {
+            "firstName": data["firstName"],
+            "lastName": data["lastName"],
+            "email": data["email"],
+            "password": data.get("password") or "password123",
+            "streetName": data["address"]["street"],
+            "streetNumber": "",
+            "city": data["address"]["city"],
+            "stateProvince": data["address"]["stateProvince"],
+            "zipCode": data["address"]["zipCode"],
+            "country": data["address"]["country"],
+            "idType": data["idType"],
+            "idNumber": data["idNumber"],
+        }
+    )
 
 def db_update_customer(customer_id, data):
     # query = "UPDATE customer SET ... WHERE id = %s RETURNING *"

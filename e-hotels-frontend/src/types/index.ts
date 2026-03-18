@@ -49,7 +49,7 @@ export interface Customer {
   firstName: string;
   lastName: string;
   email: string;
-  phone: string;
+  phone?: string;
   address: Address;
   idType: IDType;
   idNumber: string;
@@ -167,14 +167,18 @@ export interface HotelCapacity {
 // Auth types
 export interface User {
   id: string;
+  personId?: number;
   email: string;
   role: 'Customer' | 'Employee' | 'Admin';
+  employeeRole?: EmployeeRole;
   firstName: string;
   lastName: string;
   phone?: string;
   address?: Address;
   customerId?: string;
   employeeId?: string;
+  chainId?: string;
+  hotelId?: string;
 }
 
 export interface AuthResponse {
@@ -189,8 +193,8 @@ export interface RegisterData {
   email: string;
   password: string;
   confirmPassword: string;
-  phone: string;
-  street: string;
+  streetName: string;
+  streetNumber: string;
   city: string;
   stateProvince: string;
   zipCode: string;
@@ -265,8 +269,10 @@ export interface EmployeeData {
   password: string;
   address: Address;
   ssnSin: string;
+  idType?: IDType;
   role: EmployeeRole;
-  hotelId: string;
+  hotelId?: string;
+  chainId?: string;
 }
 
 export interface CustomerData {
@@ -284,6 +290,7 @@ export interface HotelFilters {
   chainId?: string;
   category?: number;
   city?: string;
+  managerId?: number;
 }
 
 export interface RoomFilters {
@@ -300,4 +307,6 @@ export interface EmployeeFilters {
 
 export interface CustomerFilters {
   searchTerm?: string;
+  chainId?: string;
+  hotelId?: string;
 }

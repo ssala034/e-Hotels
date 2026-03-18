@@ -28,8 +28,8 @@ class RegisterData(BaseModel):
     email: str
     password: str
     confirmPassword: str
-    phone: str
-    street: str
+    streetName: str
+    streetNumber: str
     city: str
     stateProvince: str
     zipCode: str
@@ -149,8 +149,10 @@ class EmployeeData(BaseModel):
     password: str
     address: Address
     ssnSin: str
+    idType: Optional[str] = "SSN"
     role: str
-    hotelId: str
+    hotelId: Optional[str] = None
+    chainId: Optional[str] = None
 
 
 # ============================================================================

@@ -4,11 +4,11 @@ WITH new_person AS (
     -- Step 1: Create the identity in the Person table
     INSERT INTO person (
         first_name, last_name, ssn_type, ssn_number, 
-        country, city, region, street_name, street_number, postalcode
+        country, city, region, street_name, street_number, postalcode, email, password
     )
     VALUES (
         'Alice', 'Lait', 'SIN', '555-000-111', 
-        'Canada', 'Ottawa', 'Ontario', 'Metcalfe St', 100, 'K1P5M1'
+        'Canada', 'Ottawa', 'Ontario', 'Metcalfe St', 100, 'K1P5M1', 'alice.lait@hotels.com', 'password123'
     )
     RETURNING person_id
 ),

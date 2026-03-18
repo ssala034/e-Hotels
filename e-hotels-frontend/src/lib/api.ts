@@ -206,6 +206,7 @@ export async function getAllHotels(filters?: HotelFilters): Promise<Hotel[]> {
     chainId: filters?.chainId,
     category: filters?.category,
     city: filters?.city,
+    managerId: filters?.managerId,
   });
   return fetchApi<Hotel[]>(`/api/hotels${qs}`);
 }
@@ -284,8 +285,9 @@ export async function getEmployee(id: string): Promise<Employee | null> {
   return fetchApi<Employee>(`/api/employees/${encodeURIComponent(id)}`);
 }
 
-export async function createEmployee(data: EmployeeData): Promise<Employee> {
-  return fetchApi<Employee>('/api/employees', {
+export async function createEmployee(data: EmployeeData, managerPersonId: number): Promise<Employee> {
+  const qs = toQueryString({ managerPersonId });
+  return fetchApi<Employee>(`/api/employees${qs}`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -307,7 +309,11 @@ export async function deleteEmployee(id: string): Promise<void> {
 // ============================================================================
 
 export async function getAllCustomers(filters?: CustomerFilters): Promise<Customer[]> {
-  const qs = toQueryString({ searchTerm: filters?.searchTerm });
+  const qs = toQueryString({
+    searchTerm: filters?.searchTerm,
+    chainId: filters?.chainId,
+    hotelId: filters?.hotelId,
+  });
   return fetchApi<Customer[]>(`/api/customers${qs}`);
 }
 

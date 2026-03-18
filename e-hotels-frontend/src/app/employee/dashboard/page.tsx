@@ -26,6 +26,8 @@ type TabType = 'checkin' | 'walkin' | 'payments';
 export default function EmployeeDashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const selectClassName =
+    'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
   const [activeTab, setActiveTab] = useState<TabType>('checkin');
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -50,7 +52,7 @@ export default function EmployeeDashboardPage() {
   });
 
   useEffect(() => {
-    if (!user || user.role !== 'Employee') {
+    if (!user || (user.role !== 'Employee' && user.role !== 'Admin')) {
       router.push('/');
       return;
     }
@@ -187,7 +189,7 @@ export default function EmployeeDashboardPage() {
     return r.amountPaid < r.totalAmount;
   });
 
-  if (!user || user.role !== 'Employee') return null;
+  if (!user || (user.role !== 'Employee' && user.role !== 'Admin')) return null;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -309,7 +311,7 @@ export default function EmployeeDashboardPage() {
                       value={walkInForm.customerId}
                       onChange={(e) => setWalkInForm({ ...walkInForm, customerId: e.target.value })}
                       required
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className={selectClassName}
                     >
                       <option value="">Select a customer</option>
                       {customers.map((customer) => (
@@ -387,7 +389,7 @@ export default function EmployeeDashboardPage() {
                           });
                         }}
                         required
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        className={selectClassName}
                       >
                         <option value="">Select a rental</option>
                         {unpaidRentings.map((renting) => (
@@ -418,7 +420,7 @@ export default function EmployeeDashboardPage() {
                           value={paymentForm.paymentMethod}
                           onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value as any })}
                           required
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          className={selectClassName}
                         >
                           <option value="Credit Card">Credit Card</option>
                           <option value="Debit Card">Debit Card</option>
