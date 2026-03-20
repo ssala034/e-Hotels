@@ -2,7 +2,7 @@ SET search_path TO "HotelProject";
 
 UPDATE employee
 SET hotel_id = 4,
-    role = 'General Manager'
+    role = 'Custodian'
 WHERE person_id = 1;
 
 UPDATE hotels

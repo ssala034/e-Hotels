@@ -20,7 +20,7 @@ new_employee AS (
         person_id, 
         (SELECT chain_id FROM hotels  WHERE hotel_id = 5), 
         5, 
-        'General Manager' -- Must contain "Manager" 
+        'Manager' -- Must contain "Manager" 
     FROM new_person
     RETURNING person_id
 )

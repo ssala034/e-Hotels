@@ -12,3 +12,12 @@ Make sure that all the integrity constraints are done properly
 * all PK and FK are correct
 * all uniques are correct
 * there is no redundant or duplication on any attribute or relation!!
+
+
+
+Mod.
+
+* Do we need to add a hotel chain
+watch out for the aggregate stuff like counts
+** Should defintely have a trigger or query to prevent double booking
+Need payment functionality just don't store in archive

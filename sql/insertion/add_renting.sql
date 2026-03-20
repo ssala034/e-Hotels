@@ -18,7 +18,7 @@ new_reservations AS (
         CURRENT_TIMESTAMP, 
         'renting', 
         'Confirmed', 
-        1, -- Manager
+        1, -- Customer
         chain_id, hotel_id, room_num
     FROM room_info
     RETURNING reservation_id, room_num, person_id, start_date, end_date -- Added start/end dates here!

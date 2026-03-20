@@ -28,7 +28,7 @@ insert_rental AS (
         CURRENT_TIMESTAMP, -- The exact moment of check-in
         daily_price,
         (daily_price * (end_date - start_date)), -- Calculated total
-        person_id
+        10 -- a random employee ID for processing the check-in
     FROM reservation_lookup
     RETURNING reservation_id
 ),

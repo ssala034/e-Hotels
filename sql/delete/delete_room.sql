@@ -18,17 +18,6 @@ BEGIN
         RETURN;
     END IF;
 
-    IF EXISTS (
-        SELECT 1
-        FROM hotel_reservation hr
-        WHERE hr.chain_id = p_chain_id
-          AND hr.hotel_id = p_hotel_id
-          AND TRIM(hr.room_num) = TRIM(p_room_num)
-          AND hr.status IN ('Pending', 'Confirmed', 'CheckedIn')
-    ) THEN
-        RETURN;
-    END IF;
-
     INSERT INTO archived_reservation (
         archive_date,
         creation_date,
@@ -112,3 +101,15 @@ $$;
 
 -- Example
 -- CALL sp_delete_room(1, 1, '101');
+
+--- removed active reservation check clause
+-- IF EXISTS (
+--         SELECT 1
+--         FROM hotel_reservation hr
+--         WHERE hr.chain_id = p_chain_id
+--           AND hr.hotel_id = p_hotel_id
+--           AND TRIM(hr.room_num) = TRIM(p_room_num)
+--           AND hr.status IN ('Pending', 'Confirmed', 'CheckedIn')
+--     ) THEN
+--         RETURN;
+--     END IF;

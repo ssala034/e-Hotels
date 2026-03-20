@@ -14,15 +14,6 @@ BEGIN
             RETURN;
     END IF;
 
-    IF EXISTS (
-        SELECT 1
-        FROM hotel_reservation hr
-        WHERE hr.person_id = p_person_id
-          AND hr.status IN ('Pending', 'Confirmed', 'CheckedIn')
-    ) THEN
-            RETURN;
-    END IF;
-
     INSERT INTO archived_reservation (
         archive_date,
         creation_date,
@@ -80,8 +71,7 @@ BEGIN
         ON hb.reservation_id = hr.reservation_id
     LEFT JOIN hotel_renting hrt
         ON hrt.reservation_id = hr.reservation_id
-    WHERE hr.person_id = p_person_id
-      AND hr.status NOT IN ('Pending', 'Confirmed', 'CheckedIn');
+    WHERE hr.person_id = p_person_id;
 
     DELETE FROM has hs
     USING hotel_reservation hr
@@ -107,3 +97,15 @@ $$;
 
 -- Example
 -- CALL sp_delete_customer(5);
+
+
+-- removed active reservation check clause
+
+-- IF EXISTS (
+--         SELECT 1
+--         FROM hotel_reservation hr
+--         WHERE hr.person_id = p_person_id
+--           AND hr.status IN ('Pending', 'Confirmed', 'CheckedIn')
+--     ) THEN
+--             RETURN;
+--     END IF;

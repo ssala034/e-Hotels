@@ -14,15 +14,6 @@ BEGIN
         RETURN;
     END IF;
 
-    IF EXISTS (
-        SELECT 1
-        FROM hotel_reservation hr
-        WHERE hr.chain_id = p_chain_id
-          AND hr.status IN ('Pending', 'Confirmed', 'CheckedIn')
-    ) THEN
-        RETURN;
-    END IF;
-
     INSERT INTO archived_reservation (
         archive_date,
         creation_date,
@@ -42,7 +33,7 @@ BEGIN
         res_start_date,
         res_end_date
     )
-    SELECT
+    SELECT -- Will archive reservation for a chain even if the chain is being deleted
         CURRENT_TIMESTAMP,
         hr.created_at,
         CASE
@@ -58,7 +49,7 @@ BEGIN
         hr.status,
         hr.reservation_type,
         CASE
-            WHEN hr.reservation_type = 'booking' AND hr.status = 'Cancelled' THEN 'cancelled_booking'
+            WHEN hr.reservation_type = 'booking' AND hr.status = 'Cancelled' THEN 'cancelled_booking' -- review this logic
             WHEN hr.reservation_type = 'booking' THEN 'completed_booking'
             WHEN hr.reservation_type = 'renting' AND hr.converted_from_res_id IS NOT NULL THEN 'converted_from_booking'
             WHEN hr.reservation_type = 'renting' AND hr.status IN ('Completed', 'CheckedOut') THEN 'completed_renting'
@@ -80,8 +71,7 @@ BEGIN
         ON hb.reservation_id = hr.reservation_id
     LEFT JOIN hotel_renting hrt
         ON hrt.reservation_id = hr.reservation_id
-    WHERE hr.chain_id = p_chain_id
-      AND hr.status NOT IN ('Pending', 'Confirmed', 'CheckedIn');
+    WHERE hr.chain_id = p_chain_id;
 
     DELETE FROM has hs
     USING hotel_reservation hr
@@ -94,10 +84,29 @@ BEGIN
     DELETE FROM employee
     WHERE chain_id = p_chain_id;
 
+    -- add deletion for hotels
+    DELETE FROM hotels
+    WHERE chain_id = p_chain_id;
+
     DELETE FROM hotel_chains
     WHERE chain_id = p_chain_id;
+
+EXCEPTION WHEN OTHERS THEN
+    RAISE EXCEPTION 'sp_delete_chain failed for chain_id %: %', p_chain_id, SQLERRM;
 END;
 $$;
 
 -- Example
 -- CALL sp_delete_chain(1);
+
+
+-- removed active reservation check clause
+
+-- IF EXISTS ( -- review this one
+--         SELECT 1
+--         FROM hotel_reservation hr
+--         WHERE hr.chain_id = p_chain_id
+--           AND hr.status IN ('Pending', 'Confirmed', 'CheckedIn')
+--     ) THEN
+--         RETURN;
+--     END IF;
