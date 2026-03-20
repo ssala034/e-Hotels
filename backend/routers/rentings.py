@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
-from models import RentingData
+from models import RentingData, WalkInRentingData
 from database import (
     db_create_renting,
+    db_create_walkin_renting,
     db_get_all_rentings,
     db_get_rentings_by_customer,
     db_get_rentings_by_hotel,
@@ -18,6 +19,20 @@ def create_direct_renting(data: RentingData):
         raise HTTPException(status_code=409, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not create renting: {exc}")
+
+    if not renting:
+        raise HTTPException(status_code=404, detail="Room not found")
+    return renting
+
+
+@router.post("/walk-in")
+def create_walk_in_renting(data: WalkInRentingData):
+    try:
+        renting = db_create_walkin_renting(data.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not create walk-in renting: {exc}")
 
     if not renting:
         raise HTTPException(status_code=404, detail="Room not found")

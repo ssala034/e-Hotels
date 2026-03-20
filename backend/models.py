@@ -89,6 +89,29 @@ class RentingData(BaseModel):
     bookingId: Optional[str] = None
 
 
+class WalkInCustomerData(BaseModel):
+    first_name: str
+    last_name: str
+    ssn_type: str
+    ssn_number: str
+    country: str
+    city: str
+    region: str
+    street_name: str
+    street_number: str
+    postalcode: str
+    email: str
+    password: str
+
+
+class WalkInRentingData(BaseModel):
+    room_id: str
+    check_in_date: str
+    check_out_date: str
+    employee_id: str
+    customer: WalkInCustomerData
+
+
 class PaymentData(BaseModel):
     rentingId: str
     amount: float

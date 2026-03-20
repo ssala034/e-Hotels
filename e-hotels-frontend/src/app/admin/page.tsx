@@ -36,6 +36,13 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 
 type TabType = 'chains' | 'hotels' | 'rooms' | 'employees' | 'customers';
 type ModalMode = 'create' | 'edit' | null;
+type DeleteTargetType = 'chain' | 'hotel';
+
+type DeleteConfirmationState = {
+  type: DeleteTargetType;
+  id: string;
+  name: string;
+} | null;
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -61,6 +68,8 @@ export default function AdminDashboardPage() {
   const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<DeleteConfirmationState>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form states
   const [chainForm, setChainForm] = useState({
@@ -201,14 +210,46 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleDeleteChain = async (id: string) => {
-    if (!confirm('Delete this hotel chain? This will also delete all associated hotels and rooms.')) return;
+  const requestDeleteChain = (chain: HotelChain) => {
+    setDeleteConfirmation({
+      type: 'chain',
+      id: chain.id,
+      name: chain.name,
+    });
+  };
+
+  const requestDeleteHotel = (hotel: Hotel) => {
+    setDeleteConfirmation({
+      type: 'hotel',
+      id: hotel.id,
+      name: hotel.name,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmation) return;
+
+    const isChainDelete = deleteConfirmation.type === 'chain';
+
+    setIsDeleting(true);
     try {
-      await deleteChain(id);
-      toast({ title: 'Chain deleted successfully' });
+      if (isChainDelete) {
+        await deleteChain(deleteConfirmation.id);
+      } else {
+        await deleteHotel(deleteConfirmation.id);
+      }
+
+      toast({ title: `${isChainDelete ? 'Hotel chain' : 'Hotel'} deleted successfully` });
+      setDeleteConfirmation(null);
       loadData();
     } catch (error) {
-      toast({ title: 'Error', description: 'Could not delete chain', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: `Could not delete ${isChainDelete ? 'hotel chain' : 'hotel'}`,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -265,17 +306,6 @@ export default function AdminDashboardPage() {
       loadData();
     } catch (error) {
       toast({ title: 'Error', description: 'Could not update hotel', variant: 'destructive' });
-    }
-  };
-
-  const handleDeleteHotel = async (id: string) => {
-    if (!confirm('Delete this hotel? This will also delete all associated rooms.')) return;
-    try {
-      await deleteHotel(id);
-      toast({ title: 'Hotel deleted successfully' });
-      loadData();
-    } catch (error) {
-      toast({ title: 'Error', description: 'Could not delete hotel', variant: 'destructive' });
     }
   };
 
@@ -701,7 +731,7 @@ export default function AdminDashboardPage() {
                         }}>
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleDeleteChain(chain.id)}>
+                        <Button size="sm" variant="destructive" onClick={() => requestDeleteChain(chain)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -808,7 +838,7 @@ export default function AdminDashboardPage() {
                           }}>
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleDeleteHotel(hotel.id)}>
+                          <Button size="sm" variant="destructive" onClick={() => requestDeleteHotel(hotel)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
@@ -1197,6 +1227,41 @@ export default function AdminDashboardPage() {
             </div>
           )}
         </>
+      )}
+      {deleteConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <Card className="w-full max-w-lg border-destructive/40 shadow-2xl">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Confirm Deletion
+              </CardTitle>
+              <CardDescription className="text-sm leading-relaxed text-foreground/90">
+                Careful: deleting {deleteConfirmation.name} will cause all information related to the {deleteConfirmation.type === 'chain' ? `hotel chain ${deleteConfirmation.name}` : `hotel ${deleteConfirmation.name}`} to be deleted, including this admin profile.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDeleteConfirmation(null)}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

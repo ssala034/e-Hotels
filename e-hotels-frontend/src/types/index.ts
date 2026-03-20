@@ -246,6 +246,29 @@ export interface RentingData {
   bookingId?: string;
 }
 
+export interface WalkInCustomerData {
+  firstName: string;
+  lastName: string;
+  idType: IDType;
+  idNumber: string;
+  country: string;
+  city: string;
+  stateProvince: string;
+  streetName: string;
+  streetNumber: string;
+  zipCode: string;
+  email: string;
+  password: string;
+}
+
+export interface WalkInRentingData {
+  roomId: string;
+  checkInDate: string;
+  checkOutDate: string;
+  employeeId: string;
+  customer: WalkInCustomerData;
+}
+
 export interface PaymentData {
   rentingId: string;
   amount: number;

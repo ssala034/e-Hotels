@@ -2433,19 +2433,82 @@ def db_convert_booking_to_renting(booking_id, employee_id):
         return None
 
     booking_lookup = """
-        SELECT hr.reservation_id, hr.chain_id, hr.hotel_id, hr.room_num, hr.start_date, hr.end_date,
-               rm.price
+        SELECT
+            hr.reservation_id,
+            hr.chain_id,
+            hr.hotel_id,
+            hr.room_num,
+            hr.start_date,
+            hr.end_date,
+            hr.created_at,
+            hr.person_id,
+            hr.status,
+            rm.price,
+            hb.booked_date,
+            hb.future_price,
+            h.hotel_name,
+            hc.chain_name,
+            p.first_name,
+            p.last_name
         FROM hotel_reservation hr
+        JOIN hotel_booking hb ON hb.reservation_id = hr.reservation_id
         JOIN rooms rm ON rm.chain_id = hr.chain_id AND rm.hotel_id = hr.hotel_id AND TRIM(rm.room_num) = TRIM(hr.room_num)
+        LEFT JOIN hotels h ON h.chain_id = hr.chain_id AND h.hotel_id = hr.hotel_id
+        LEFT JOIN hotel_chains hc ON hc.chain_id = hr.chain_id
+        LEFT JOIN person p ON p.person_id = hr.person_id
         WHERE hr.reservation_id = %s
           AND hr.reservation_type = 'booking'
           AND hr.status = 'Confirmed'
         LIMIT 1;
     """
+    archive_booking = """
+        INSERT INTO archived_reservation (
+            archive_date,
+            creation_date,
+            archived_price_paid,
+            archived_hotel_name,
+            archived_chain_name,
+            archived_room_num,
+            archived_customer_id,
+            archived_employee_id,
+            archived_customer_name,
+            archived_status,
+            archived_type,
+            archived_subtype,
+            archived_checked_in,
+            archived_checked_out,
+            archived_booked_date,
+            res_start_date,
+            res_end_date
+        )
+        VALUES (
+            CURRENT_TIMESTAMP,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            'booking',
+            'converted_from_booking',
+            CURRENT_TIMESTAMP,
+            NULL,
+            %s,
+            %s,
+            %s
+        );
+    """
     insert_renting = """
         INSERT INTO hotel_renting (reservation_id, checked_in_time, rental_price, total_price, person_id)
         VALUES (%s, CURRENT_TIMESTAMP, %s, ((%s::date - %s::date) * %s), %s)
-        ON CONFLICT (reservation_id) DO NOTHING;
+        ON CONFLICT (reservation_id) DO UPDATE
+        SET
+            rental_price = EXCLUDED.rental_price,
+            total_price = EXCLUDED.total_price,
+            person_id = EXCLUDED.person_id;
     """
     update_reservation = """
         UPDATE hotel_reservation
@@ -2454,6 +2517,7 @@ def db_convert_booking_to_renting(booking_id, employee_id):
             converted_from_res_id = %s
         WHERE reservation_id = %s;
     """
+    delete_booking = "DELETE FROM hotel_booking WHERE reservation_id = %s;"
     update_room = """
         UPDATE rooms
         SET status = 'Occupied'
@@ -2469,6 +2533,29 @@ def db_convert_booking_to_renting(booking_id, employee_id):
                 conn.rollback()
                 return None
 
+            customer_name = " ".join(
+                part for part in [row.get("first_name"), row.get("last_name")] if part
+            ).strip() or "Unknown Customer"
+            booking_total = float(row.get("future_price") or 0)
+
+            cur.execute(
+                archive_booking,
+                (
+                    row["created_at"],
+                    booking_total,
+                    row.get("hotel_name"),
+                    row.get("chain_name"),
+                    row["room_num"].strip(),
+                    row["person_id"],
+                    employee_person_id,
+                    customer_name,
+                    row["status"],
+                    row.get("booked_date"),
+                    row["start_date"],
+                    row["end_date"],
+                ),
+            )
+
             cur.execute(
                 insert_renting,
                 (
@@ -2481,6 +2568,7 @@ def db_convert_booking_to_renting(booking_id, employee_id):
                 ),
             )
             cur.execute(update_reservation, (reservation_id, reservation_id))
+            cur.execute(delete_booking, (reservation_id,))
             cur.execute(update_room, (row["chain_id"], row["hotel_id"], row["room_num"].strip()))
 
         conn.commit()
@@ -2744,6 +2832,157 @@ def db_create_renting(data):
                     room_row["price"],
                     data["checkOutDate"],
                     data["checkInDate"],
+                    room_row["price"],
+                    employee_person_id,
+                ),
+            )
+            cur.execute(insert_has, (resolved_chain_id, resolved_hotel_id, resolved_room_num, reservation_id))
+            cur.execute(update_room, (resolved_chain_id, resolved_hotel_id, resolved_room_num))
+
+        conn.commit()
+        return db_get_renting_by_id(f"rent-{reservation_id}")
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def db_create_walkin_renting(data):
+    customer = data.get("customer") or {}
+
+    employee_person_id = _extract_numeric_id(data.get("employee_id"))
+    chain_id, hotel_id, room_num = _extract_room_parts(data.get("room_id"))
+    street_number = _extract_numeric_id(customer.get("street_number"))
+
+    if employee_person_id is None or room_num is None:
+        return None
+
+    room_lookup = """
+        SELECT chain_id, hotel_id, room_num, price
+        FROM rooms
+        WHERE TRIM(room_num) = TRIM(%s)
+          AND (%s IS NULL OR chain_id = %s)
+          AND (%s IS NULL OR hotel_id = %s)
+        ORDER BY chain_id, hotel_id
+        LIMIT 1;
+    """
+    conflict_query = """
+        SELECT 1
+        FROM hotel_reservation hr
+        WHERE hr.chain_id = %s
+          AND hr.hotel_id = %s
+          AND TRIM(hr.room_num) = TRIM(%s)
+          AND hr.status NOT IN ('Cancelled', 'CheckedOut', 'Completed')
+          AND hr.start_date < %s::date
+          AND hr.end_date > %s::date
+        LIMIT 1;
+    """
+    insert_person = """
+        INSERT INTO person (
+            first_name,
+            last_name,
+            ssn_type,
+            ssn_number,
+            country,
+            city,
+            region,
+            street_name,
+            street_number,
+            postalcode,
+            email,
+            password
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING person_id;
+    """
+    insert_customer = """
+        INSERT INTO customer (person_id, register_date)
+        VALUES (%s, CURRENT_DATE);
+    """
+    insert_res = """
+        INSERT INTO hotel_reservation (
+            start_date, end_date, created_at,
+            reservation_type, status, person_id,
+            chain_id, hotel_id, room_num
+        )
+        VALUES (%s, %s, CURRENT_TIMESTAMP, 'renting', 'CheckedIn', %s, %s, %s, %s)
+        RETURNING reservation_id;
+    """
+    insert_rent = """
+        INSERT INTO hotel_renting (reservation_id, checked_in_time, rental_price, total_price, person_id)
+        VALUES (%s, CURRENT_TIMESTAMP, %s, ((%s::date - %s::date) * %s), %s);
+    """
+    insert_has = "INSERT INTO has (chain_id, hotel_id, room_num, reservation_id) VALUES (%s, %s, %s, %s);"
+    update_room = "UPDATE rooms SET status = 'Occupied' WHERE chain_id = %s AND hotel_id = %s AND TRIM(room_num) = TRIM(%s);"
+
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(room_lookup, (room_num, chain_id, chain_id, hotel_id, hotel_id))
+            room_row = cur.fetchone()
+            if not room_row:
+                conn.rollback()
+                return None
+
+            resolved_chain_id = room_row["chain_id"]
+            resolved_hotel_id = room_row["hotel_id"]
+            resolved_room_num = room_row["room_num"].strip()
+
+            cur.execute(
+                conflict_query,
+                (
+                    resolved_chain_id,
+                    resolved_hotel_id,
+                    resolved_room_num,
+                    data["check_out_date"],
+                    data["check_in_date"],
+                ),
+            )
+            if cur.fetchone():
+                conn.rollback()
+                raise ValueError("Room not available for selected dates")
+
+            cur.execute(
+                insert_person,
+                (
+                    customer["first_name"],
+                    customer["last_name"],
+                    _normalize_id_type(customer["ssn_type"]),
+                    customer["ssn_number"],
+                    customer["country"],
+                    customer["city"],
+                    customer["region"],
+                    customer["street_name"],
+                    street_number,
+                    customer["postalcode"],
+                    customer["email"],
+                    customer["password"],
+                ),
+            )
+            customer_person_id = cur.fetchone()["person_id"]
+            cur.execute(insert_customer, (customer_person_id,))
+
+            cur.execute(
+                insert_res,
+                (
+                    data["check_in_date"],
+                    data["check_out_date"],
+                    customer_person_id,
+                    resolved_chain_id,
+                    resolved_hotel_id,
+                    resolved_room_num,
+                ),
+            )
+            reservation_id = cur.fetchone()["reservation_id"]
+
+            cur.execute(
+                insert_rent,
+                (
+                    reservation_id,
+                    room_row["price"],
+                    data["check_out_date"],
+                    data["check_in_date"],
                     room_row["price"],
                     employee_person_id,
                 ),

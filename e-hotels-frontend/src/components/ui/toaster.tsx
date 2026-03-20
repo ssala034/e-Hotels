@@ -46,6 +46,7 @@ const addToRemoveQueue = (toastId: string) => {
 export const reducer = (state: State, action: ActionType): State => {
   switch (action.type) {
     case 'ADD_TOAST':
+      addToRemoveQueue(action.toast.id)
       return {
         ...state,
         toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
@@ -82,7 +83,16 @@ export const reducer = (state: State, action: ActionType): State => {
       }
     }
     case 'REMOVE_TOAST':
+      if (action.toastId) {
+        const timeout = toastTimeouts.get(action.toastId)
+        if (timeout) {
+          clearTimeout(timeout)
+          toastTimeouts.delete(action.toastId)
+        }
+      }
       if (action.toastId === undefined) {
+        toastTimeouts.forEach((timeout) => clearTimeout(timeout))
+        toastTimeouts.clear()
         return {
           ...state,
           toasts: [],
@@ -177,7 +187,7 @@ function Toaster() {
           </div>
           {action}
           <button
-            onClick={() => dispatch({ type: 'DISMISS_TOAST', toastId: id })}
+            onClick={() => dispatch({ type: 'REMOVE_TOAST', toastId: id })}
             className="absolute right-1 top-1 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-1 group-hover:opacity-100"
           >
             <X className="h-4 w-4" />
