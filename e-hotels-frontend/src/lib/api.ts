@@ -3,7 +3,7 @@ import {
   BookingData, Renting, RentingData, Payment, PaymentData, HotelChain, ChainData,
   Hotel, HotelData, RoomData, Employee, EmployeeData, Customer, CustomerData,
   HotelFilters, RoomFilters, EmployeeFilters, CustomerFilters, AreaAvailability,
-  HotelCapacity
+  HotelCapacity, ArchivedReservation
 } from '@/types';
 
 // ============================================================================
@@ -349,4 +349,12 @@ export async function getAvailableRoomsPerArea(): Promise<AreaAvailability[]> {
 
 export async function getHotelCapacityView(): Promise<HotelCapacity[]> {
   return fetchApi<HotelCapacity[]>('/api/analytics/hotel-capacity');
+}
+
+export async function getArchivedReservations(filters?: { chainId?: string; hotelId?: string }): Promise<ArchivedReservation[]> {
+  const qs = toQueryString({
+    chainId: filters?.chainId,
+    hotelId: filters?.hotelId,
+  });
+  return fetchApi(`/api/archived-reservations${qs}`);
 }

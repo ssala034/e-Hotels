@@ -2,46 +2,28 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List
 from datetime import datetime
 from models import SearchCriteria
-import mock_data
+import logging
 from database import db_get_all_rooms, db_get_all_hotels, db_get_all_chains
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
 def _has_date_conflict(room_id: str, check_in: str, check_out: str) -> bool:
     """Check if a room has a booking/renting conflict for the given dates."""
-    search_in = datetime.fromisoformat(check_in)
-    search_out = datetime.fromisoformat(check_out)
-
-    for b in mock_data.bookings:
-        if b["roomId"] != room_id:
-            continue
-        if b["status"] not in ("Confirmed", "Pending"):
-            continue
-        res_in = datetime.fromisoformat(b["checkInDate"])
-        res_out = datetime.fromisoformat(b["checkOutDate"])
-        if search_in < res_out and search_out > res_in:
-            return True
-
-    for r in mock_data.rentings:
-        if r["roomId"] != room_id:
-            continue
-        if r["status"] != "Active":
-            continue
-        res_in = datetime.fromisoformat(r["checkInDate"])
-        res_out = datetime.fromisoformat(r["checkOutDate"])
-        if search_in < res_out and search_out > res_in:
-            return True
-
+    logger.info("mock data removed, to be implemented")
     return False
 
 
 def _find_hotel(hotel_id: str):
-    return next((h for h in mock_data.hotels if h["id"] == hotel_id), None)
+    logger.info("mock data removed, to be implemented")
+    return None
 
 
 def _find_chain(chain_id: str):
-    return next((c for c in mock_data.chains if c["id"] == chain_id), None)
+    logger.info("mock data removed, to be implemented")
+    return None
 
 
 @router.post("/rooms")

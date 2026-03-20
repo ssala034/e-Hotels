@@ -121,6 +121,27 @@ export interface Payment {
 
 export type PaymentMethod = 'Cash' | 'Credit Card' | 'Debit Card' | 'Bank Transfer';
 
+export interface ArchivedReservation {
+  id: string;
+  chainId: string;
+  hotelName: string;
+  hotelId?: string;
+  customerName: string;
+  customerEmail: string;
+  roomNumber: string;
+  roomType: string;
+  checkInDate: string;
+  checkOutDate: string;
+  archivedAt: string;
+  reservationStatus: 'Completed' | 'Cancelled' | 'No Show' | 'Converted';
+  paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid' | 'Refunded';
+  source: 'Booking' | 'Walk-In';
+  totalAmount: number;
+  amountPaid: number;
+  reasonArchived: string;
+  notes?: string;
+}
+
 export interface Address {
   street: string;
   city: string;

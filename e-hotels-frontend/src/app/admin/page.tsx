@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -22,16 +22,17 @@ import {
   updateEmployee,
   deleteEmployee,
   deleteCustomer,
+  getArchivedReservations,
 } from '@/lib/api';
-import { HotelChain, Hotel, Room, Employee, Customer, EmployeeRole, IDType } from '@/types';
+import { HotelChain, Hotel, Room, Employee, Customer, EmployeeRole, IDType, ArchivedReservation, RoomCapacity, ViewType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toaster';
-import { Building2, Hotel as HotelIcon, DoorOpen, Users, UserCog, Plus, Edit, Trash2, Star } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { Building2, Hotel as HotelIcon, DoorOpen, Users, UserCog, Plus, Edit, Trash2, Star, Archive, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { formatCurrency, formatDate } from '@/lib/utils';
 
 type TabType = 'chains' | 'hotels' | 'rooms' | 'employees' | 'customers';
 type ModalMode = 'create' | 'edit' | null;
@@ -51,10 +52,15 @@ export default function AdminDashboardPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [archivedReservations, setArchivedReservations] = useState<ArchivedReservation[]>([]);
+  const [expandedArchivedReservationIds, setExpandedArchivedReservationIds] = useState<Record<string, boolean>>({});
 
   // Modal states
   const [modalMode, setModalMode] = useState<ModalMode>(null);
-  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [selectedItem, setSelectedItem] = useState<HotelChain | null>(null);
+  const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   // Form states
   const [chainForm, setChainForm] = useState({
@@ -124,18 +130,20 @@ export default function AdminDashboardPage() {
         throw new Error('Manager scope is missing chain/hotel assignment');
       }
 
-      const [chainsData, hotelsData, roomsData, employeesData, customersData] = await Promise.all([
+      const [chainsData, hotelsData, roomsData, employeesData, customersData, archivedData] = await Promise.all([
         getChainById(managerChainId).then((chain) => (chain ? [chain] : [])),
         getAllHotels({ managerId: managerPersonId }),
         getAllRooms({ hotelId: managerHotelId }),
         getAllEmployees({ hotelId: managerHotelId }),
         getAllCustomers({ chainId: managerChainId, hotelId: managerHotelId }),
+        getArchivedReservations({ chainId: managerChainId, hotelId: managerHotelId }),
       ]);
       setChains(chainsData);
       setHotels(hotelsData);
       setRooms(roomsData);
       setEmployees(employeesData);
       setCustomers(customersData);
+      setArchivedReservations(archivedData);
     } catch (error) {
       toast({
         title: 'Error loading data',
@@ -221,13 +229,42 @@ export default function AdminDashboardPage() {
         },
         contactEmail: hotelForm.email,
         contactPhone: hotelForm.phoneNumber,
-        managerId: 'emp-1', // Default manager
+        managerId: user?.id || '',
       });
       toast({ title: 'Hotel created successfully' });
       setModalMode(null);
+      setSelectedHotel(null);
       loadData();
     } catch (error) {
       toast({ title: 'Error', description: 'Could not create hotel', variant: 'destructive' });
+    }
+  };
+
+  const handleUpdateHotel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedHotel) return;
+    try {
+      await updateHotel(selectedHotel.id, {
+        chainId: hotelForm.chainId,
+        name: hotelForm.name,
+        category: hotelForm.starRating as 1 | 2 | 3 | 4 | 5,
+        address: {
+          street: hotelForm.street,
+          city: hotelForm.city,
+          stateProvince: hotelForm.stateProvince,
+          zipCode: hotelForm.zipCode || '00000',
+          country: hotelForm.country,
+        },
+        contactEmail: hotelForm.email,
+        contactPhone: hotelForm.phoneNumber,
+        managerId: selectedHotel.managerId || (user?.id || ''),
+      });
+      toast({ title: 'Hotel updated successfully' });
+      setModalMode(null);
+      setSelectedHotel(null);
+      loadData();
+    } catch (error) {
+      toast({ title: 'Error', description: 'Could not update hotel', variant: 'destructive' });
     }
   };
 
@@ -245,23 +282,80 @@ export default function AdminDashboardPage() {
   // Room Handlers
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const capacityByNumber: Record<number, RoomCapacity> = {
+      1: 'Single',
+      2: 'Double',
+      3: 'Triple',
+      4: 'Suite',
+      5: 'Family',
+      6: 'Studio',
+    };
+
+    const normalizedCapacity = capacityByNumber[roomForm.capacity] ?? 'Double';
+    const validViewTypes: ViewType[] = ['Sea View', 'Mountain View', 'City View', 'Garden View', 'No View'];
+    const normalizedViewType: ViewType = validViewTypes.includes(roomForm.viewType as ViewType)
+      ? (roomForm.viewType as ViewType)
+      : 'No View';
+
     try {
       await createRoom({
         hotelId: roomForm.hotelId,
         roomNumber: roomForm.roomNumber,
         roomType: 'Standard',
         price: roomForm.pricePerNight,
-        capacity: roomForm.capacity as any,
-        viewType: (roomForm.viewType || 'No View') as any,
+        capacity: normalizedCapacity,
+        viewType: normalizedViewType,
         isExtendable: roomForm.canBeExtended,
         amenities: roomForm.amenities.split(',').map(a => a.trim()).filter(Boolean),
         problems: roomForm.isDamaged ? 'Damaged' : undefined,
       });
       toast({ title: 'Room created successfully' });
       setModalMode(null);
+      setSelectedRoom(null);
       loadData();
     } catch (error) {
       toast({ title: 'Error', description: 'Could not create room', variant: 'destructive' });
+    }
+  };
+
+  const handleUpdateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRoom) return;
+
+    const capacityByNumber: Record<number, RoomCapacity> = {
+      1: 'Single',
+      2: 'Double',
+      3: 'Triple',
+      4: 'Suite',
+      5: 'Family',
+      6: 'Studio',
+    };
+
+    const normalizedCapacity = capacityByNumber[roomForm.capacity] ?? 'Double';
+    const validViewTypes: ViewType[] = ['Sea View', 'Mountain View', 'City View', 'Garden View', 'No View'];
+    const normalizedViewType: ViewType = validViewTypes.includes(roomForm.viewType as ViewType)
+      ? (roomForm.viewType as ViewType)
+      : 'No View';
+
+    try {
+      await updateRoom(selectedRoom.id, {
+        hotelId: roomForm.hotelId,
+        roomNumber: roomForm.roomNumber,
+        roomType: 'Standard',
+        price: roomForm.pricePerNight,
+        capacity: normalizedCapacity,
+        viewType: normalizedViewType,
+        isExtendable: roomForm.canBeExtended,
+        amenities: roomForm.amenities.split(',').map(a => a.trim()).filter(Boolean),
+        problems: roomForm.isDamaged ? 'Damaged' : undefined,
+      });
+      toast({ title: 'Room updated successfully' });
+      setModalMode(null);
+      setSelectedRoom(null);
+      loadData();
+    } catch (error) {
+      toast({ title: 'Error', description: 'Could not update room', variant: 'destructive' });
     }
   };
 
@@ -303,9 +397,40 @@ export default function AdminDashboardPage() {
       }, user.personId);
       toast({ title: 'Employee created successfully' });
       setModalMode(null);
+      setSelectedEmployee(null);
       loadData();
     } catch (error) {
       toast({ title: 'Error', description: 'Could not create employee', variant: 'destructive' });
+    }
+  };
+
+  const handleUpdateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmployee) return;
+
+    try {
+      await updateEmployee(selectedEmployee.id, {
+        firstName: employeeForm.firstName,
+        lastName: employeeForm.lastName,
+        email: employeeForm.email,
+        password: employeeForm.password,
+        role: employeeForm.role,
+        ssnSin: employeeForm.idNumber,
+        idType: employeeForm.idType,
+        address: {
+          street: employeeForm.street,
+          city: employeeForm.city,
+          stateProvince: employeeForm.stateProvince,
+          zipCode: employeeForm.zipCode,
+          country: employeeForm.country,
+        },
+      });
+      toast({ title: 'Employee updated successfully' });
+      setModalMode(null);
+      setSelectedEmployee(null);
+      loadData();
+    } catch (error) {
+      toast({ title: 'Error', description: 'Could not update employee', variant: 'destructive' });
     }
   };
 
@@ -330,6 +455,153 @@ export default function AdminDashboardPage() {
     } catch (error) {
       toast({ title: 'Error', description: 'Could not delete customer', variant: 'destructive' });
     }
+  };
+
+  const managedHotelKeys = useMemo(() => {
+    return new Set(hotels.map((hotel) => `${hotel.chainId}::${hotel.name.toLowerCase()}`));
+  }, [hotels]);
+
+  const managedArchivedReservations = useMemo(() => {
+    const scoped = archivedReservations.filter((reservation) =>
+      managedHotelKeys.has(`${reservation.chainId}::${reservation.hotelName.toLowerCase()}`)
+    );
+
+    if (scoped.length > 0 || hotels.length === 0) {
+      return scoped;
+    }
+    return scoped;
+  }, [managedHotelKeys, hotels, archivedReservations]);
+
+  const orphanedArchivedReservations = useMemo(() => {
+    return archivedReservations.filter((reservation) => !reservation.hotelId);
+  }, [archivedReservations]);
+
+  const toggleArchivedReservationDetails = (reservationId: string) => {
+    setExpandedArchivedReservationIds((prev) => ({
+      ...prev,
+      [reservationId]: !prev[reservationId],
+    }));
+  };
+
+  const getReservationStatusVariant = (status: ArchivedReservation['reservationStatus']) => {
+    switch (status) {
+      case 'Completed':
+        return 'success';
+      case 'Cancelled':
+      case 'No Show':
+        return 'warning';
+      case 'Converted':
+      default:
+        return 'secondary';
+    }
+  };
+
+  const getPaymentStatusVariant = (status: ArchivedReservation['paymentStatus']) => {
+    switch (status) {
+      case 'Paid':
+        return 'success';
+      case 'Partially Paid':
+        return 'warning';
+      case 'Unpaid':
+        return 'destructive';
+      case 'Refunded':
+      default:
+        return 'secondary';
+    }
+  };
+
+  const renderArchivedReservationCard = (reservation: ArchivedReservation, isOrphaned: boolean = false) => {
+    const isExpanded = !!expandedArchivedReservationIds[reservation.id];
+
+    return (
+      <Card key={reservation.id}>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-1">
+              <h4 className="font-semibold">{reservation.hotelName} - Room {reservation.roomNumber}</h4>
+              <p className="text-sm text-muted-foreground">{reservation.customerName} ({reservation.customerEmail})</p>
+              <p className="text-xs text-muted-foreground">
+                {formatDate(reservation.checkInDate)} to {formatDate(reservation.checkOutDate)}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 md:justify-end">
+              {isOrphaned && (
+                <Badge variant="warning" className="gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Orphaned
+                </Badge>
+              )}
+              <Badge variant={getReservationStatusVariant(reservation.reservationStatus)}>{reservation.reservationStatus}</Badge>
+              <Badge variant={getPaymentStatusVariant(reservation.paymentStatus)}>{reservation.paymentStatus}</Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => toggleArchivedReservationDetails(reservation.id)}
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp className="w-4 h-4 mr-1" />
+                    Hide Details
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4 mr-1" />
+                    View Details
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {isExpanded && (
+            <div className="grid gap-3 rounded-md border p-3 text-sm md:grid-cols-2">
+              <div>
+                <p className="text-muted-foreground">Reservation ID</p>
+                <p className="font-medium">{reservation.id}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Archived At</p>
+                <p className="font-medium">{formatDate(reservation.archivedAt)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Chain ID</p>
+                <p className="font-medium">{reservation.chainId}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Hotel ID</p>
+                <p className="font-medium">{reservation.hotelId || 'Not found'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Room Type</p>
+                <p className="font-medium">{reservation.roomType}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Source</p>
+                <p className="font-medium">{reservation.source}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Total Amount</p>
+                <p className="font-medium">{formatCurrency(reservation.totalAmount)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Amount Paid</p>
+                <p className="font-medium">{formatCurrency(reservation.amountPaid)}</p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-muted-foreground">Archive Reason</p>
+                <p className="font-medium">{reservation.reasonArchived}</p>
+              </div>
+              {reservation.notes && (
+                <div className="md:col-span-2">
+                  <p className="text-muted-foreground">Notes</p>
+                  <p className="font-medium">{reservation.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
   };
 
   if (!user || user.role !== 'Admin') return null;
@@ -442,7 +714,7 @@ export default function AdminDashboardPage() {
 
           {/* Hotels Tab */}
           {activeTab === 'hotels' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">Hotels</h2>
                 <Button onClick={() => setModalMode('create')}>
@@ -451,13 +723,13 @@ export default function AdminDashboardPage() {
                 </Button>
               </div>
 
-              {modalMode === 'create' && (
+              {modalMode && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Create Hotel</CardTitle>
+                    <CardTitle>{modalMode === 'create' ? 'Create Hotel' : 'Edit Hotel'}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={handleCreateHotel} className="space-y-4">
+                    <form onSubmit={modalMode === 'create' ? handleCreateHotel : handleUpdateHotel} className="space-y-4">
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                           <Label>Hotel Chain</Label>
@@ -496,8 +768,8 @@ export default function AdminDashboardPage() {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button type="submit">Create Hotel</Button>
-                        <Button type="button" variant="outline" onClick={() => setModalMode(null)}>Cancel</Button>
+                        <Button type="submit">{modalMode === 'create' ? 'Create Hotel' : 'Update Hotel'}</Button>
+                        <Button type="button" variant="outline" onClick={() => { setModalMode(null); setSelectedHotel(null); }}>Cancel</Button>
                       </div>
                     </form>
                   </CardContent>
@@ -518,7 +790,22 @@ export default function AdminDashboardPage() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="outline" onClick={() => {
+                            setModalMode('edit');
+                            setSelectedHotel(hotel);
+                            setHotelForm({
+                              chainId: hotel.chainId,
+                              name: hotel.name,
+                              starRating: hotel.category,
+                              email: hotel.contactEmail,
+                              phoneNumber: hotel.contactPhone,
+                              street: hotel.address.street,
+                              city: hotel.address.city,
+                              stateProvince: hotel.address.stateProvince,
+                              zipCode: hotel.address.zipCode,
+                              country: hotel.address.country,
+                            });
+                          }}>
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button size="sm" variant="destructive" onClick={() => handleDeleteHotel(hotel.id)}>
@@ -530,6 +817,46 @@ export default function AdminDashboardPage() {
                   </Card>
                 ))}
               </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Archive className="h-5 w-5" />
+                    Archived Reservations
+                  </CardTitle>
+                  <CardDescription>
+                    Historical reservations for hotels you manage. Expand any record to view full details.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">Managed Hotels Archive</h3>
+                      <Badge variant="secondary">{managedArchivedReservations.length}</Badge>
+                    </div>
+                    {managedArchivedReservations.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No archived reservations found for your managed hotels yet.</p>
+                    ) : (
+                      managedArchivedReservations.map((reservation) => renderArchivedReservationCard(reservation))
+                    )}
+                  </div>
+
+                  <div className="space-y-3 border-t pt-6">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">Orphaned (chain_id, hotel_name) Archive</h3>
+                      <Badge variant="outline">{orphanedArchivedReservations.length}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Frontend placeholder subsection for archived reservations whose source hotel reference no longer exists.
+                    </p>
+                    {orphanedArchivedReservations.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No orphaned archived reservations found.</p>
+                    ) : (
+                      orphanedArchivedReservations.map((reservation) => renderArchivedReservationCard(reservation, true))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
 
@@ -544,13 +871,13 @@ export default function AdminDashboardPage() {
                 </Button>
               </div>
 
-              {modalMode === 'create' && (
+              {modalMode && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Create Room</CardTitle>
+                    <CardTitle>{modalMode === 'create' ? 'Create Room' : 'Edit Room'}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={handleCreateRoom} className="space-y-4">
+                    <form onSubmit={modalMode === 'create' ? handleCreateRoom : handleUpdateRoom} className="space-y-4">
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                           <Label>Hotel</Label>
@@ -595,8 +922,8 @@ export default function AdminDashboardPage() {
                         </label>
                       </div>
                       <div className="flex gap-2">
-                        <Button type="submit">Create Room</Button>
-                        <Button type="button" variant="outline" onClick={() => setModalMode(null)}>Cancel</Button>
+                        <Button type="submit">{modalMode === 'create' ? 'Create Room' : 'Update Room'}</Button>
+                        <Button type="button" variant="outline" onClick={() => { setModalMode(null); setSelectedRoom(null); }}>Cancel</Button>
                       </div>
                     </form>
                   </CardContent>
@@ -619,7 +946,21 @@ export default function AdminDashboardPage() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="outline" onClick={() => {
+                            setModalMode('edit');
+                            setSelectedRoom(room);
+                            setRoomForm({
+                              hotelId: room.hotelId,
+                              roomNumber: room.roomNumber,
+                              pricePerNight: room.price,
+                              capacity: room.capacity === 'Single' ? 1 : room.capacity === 'Double' ? 2 : room.capacity === 'Triple' ? 3 : room.capacity === 'Family' ? 5 : room.capacity === 'Studio' ? 6 : 4,
+                              category: room.hotel?.category || 3,
+                              viewType: room.viewType,
+                              canBeExtended: !!room.isExtendable,
+                              isDamaged: !!room.problems,
+                              amenities: (room.amenities || []).join(', '),
+                            });
+                          }}>
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button size="sm" variant="destructive" onClick={() => handleDeleteRoom(room.id)}>
@@ -664,13 +1005,13 @@ export default function AdminDashboardPage() {
                 </Button>
               </div>
 
-              {modalMode === 'create' && (
+              {modalMode && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Create Employee</CardTitle>
+                    <CardTitle>{modalMode === 'create' ? 'Create Employee' : 'Edit Employee'}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={handleCreateEmployee} className="space-y-4">
+                    <form onSubmit={modalMode === 'create' ? handleCreateEmployee : handleUpdateEmployee} className="space-y-4">
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                           <Label>First Name</Label>
@@ -777,8 +1118,8 @@ export default function AdminDashboardPage() {
                         New employee will be assigned to your managed property ({user?.chainId || 'N/A'} / {user?.hotelId || 'N/A'}).
                       </p>
                       <div className="flex gap-2">
-                        <Button type="submit">Create Employee</Button>
-                        <Button type="button" variant="outline" onClick={() => setModalMode(null)}>Cancel</Button>
+                        <Button type="submit">{modalMode === 'create' ? 'Create Employee' : 'Update Employee'}</Button>
+                        <Button type="button" variant="outline" onClick={() => { setModalMode(null); setSelectedEmployee(null); }}>Cancel</Button>
                       </div>
                     </form>
                   </CardContent>
@@ -796,7 +1137,24 @@ export default function AdminDashboardPage() {
                           <Badge variant="secondary" className="mt-1">{employee.role}</Badge>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="outline" onClick={() => {
+                            setModalMode('edit');
+                            setSelectedEmployee(employee);
+                            setEmployeeForm({
+                              firstName: employee.firstName,
+                              lastName: employee.lastName,
+                              email: employee.email,
+                              password: '',
+                              role: employee.role,
+                              street: employee.address.street,
+                              city: employee.address.city,
+                              stateProvince: employee.address.stateProvince,
+                              zipCode: employee.address.zipCode,
+                              country: employee.address.country,
+                              idType: 'SSN' as IDType,
+                              idNumber: employee.ssnSin,
+                            });
+                          }}>
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button size="sm" variant="destructive" onClick={() => handleDeleteEmployee(employee.id)}>
