@@ -3059,21 +3059,203 @@ def db_create_payment(data):
 
 # --- Search ---
 
-def db_search_available_rooms(criteria):
-    # query = "SELECT * FROM room r JOIN hotel h ON ... WHERE ... (availability check)"
-    pass
+def db_search_available_rooms(criteria):  # shuaib0-0
+    """
+    Search for available rooms based on criteria.
+    Filters by price range and applies date-based availability checks.
+    """
+    where_clauses = []
+    params = []
+
+    min_price = criteria.get("minPrice")
+    if min_price is not None:
+        where_clauses.append("r.price >= %s")
+        params.append(min_price)
+
+    max_price = criteria.get("maxPrice")
+    if max_price is not None:
+        where_clauses.append("r.price <= %s")
+        params.append(max_price)
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    query = f"""
+        SELECT
+            r.chain_id,
+            r.hotel_id,
+            r.room_num,
+            r.price,
+            r.capacity,
+            r.view,
+            r.status,
+            (
+                SELECT ARRAY_AGG(ra.amenity ORDER BY ra.amenity)
+                FROM room_amenities ra
+                WHERE ra.chain_id = r.chain_id
+                  AND ra.hotel_id = r.hotel_id
+                  AND ra.room_num = r.room_num
+            ) AS amenities,
+            EXISTS (
+                SELECT 1
+                FROM room_extendible re
+                WHERE re.chain_id = r.chain_id
+                  AND re.hotel_id = r.hotel_id
+                  AND re.room_num = r.room_num
+            ) AS is_extendable,
+            (
+                SELECT ARRAY_AGG(re.extendible ORDER BY re.extendible)
+                FROM room_extendible re
+                WHERE re.chain_id = r.chain_id
+                    AND re.hotel_id = r.hotel_id
+                    AND re.room_num = r.room_num
+            ) AS extendable_with,
+            (
+                SELECT ARRAY_AGG(ri.issue ORDER BY ri.issue)
+                FROM room_issues ri
+                WHERE ri.chain_id = r.chain_id
+                  AND ri.hotel_id = r.hotel_id
+                  AND ri.room_num = r.room_num
+            ) AS issues
+        FROM rooms r
+        {where_sql}
+        ORDER BY r.chain_id, r.hotel_id, r.room_num;
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, tuple(params))
+            rooms = cur.fetchall()
+            
+            # Filter by availability if dates provided
+            if criteria.get("checkInDate") and criteria.get("checkOutDate"):
+                available_rooms = []
+                for room in rooms:
+                    if not db_check_room_availability(
+                        f"room-{room['chain_id']}-{room['hotel_id']}-{room['room_num']}",
+                        criteria["checkInDate"],
+                        criteria["checkOutDate"]
+                    ):
+                        available_rooms.append(room)
+                rooms = available_rooms
+            
+            return [_map_room_row(r) for r in rooms]
+    finally:
+        conn.close()
+
 
 def db_check_room_availability(room_id, check_in, check_out):
-    # query = "SELECT COUNT(*) FROM booking WHERE room_id = %s AND status IN ('Confirmed','Pending') AND ..."
-    pass
+    """
+    Check if a room is available for the given date range.
+    Returns False if available, True if there's a conflict.
+    """
+    chain_id, hotel_id, room_num = _extract_room_parts(room_id)
+    if room_num is None:
+        return True  # Not available if room cannot be identified
+
+    query = """
+        SELECT 1
+        FROM hotel_reservation hr
+        WHERE hr.chain_id = %s
+          AND hr.hotel_id = %s
+          AND TRIM(hr.room_num) = TRIM(%s)
+          AND hr.status NOT IN ('Cancelled', 'CheckedOut', 'Completed')
+          AND hr.start_date < %s::date
+          AND hr.end_date > %s::date
+        LIMIT 1;
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query, (chain_id, hotel_id, room_num, check_out, check_in))
+            return cur.fetchone() is not None  # True if conflict exists
+    finally:
+        conn.close()
 
 
 # --- Analytics (SQL Views) ---
 
 def db_get_available_rooms_per_area():
-    # query = "SELECT * FROM available_rooms_per_area"  (uses your SQL view)
-    pass
+    """
+    Retrieve the materialized view of available rooms grouped by area, chain, and hotel.
+    This shows room availability per geographic area and chain.
+    """
+    query = """
+        SELECT
+            rpa.region,
+            rpa.chain_name,
+            rpa.hotel_name,
+            rpa.available_rooms
+        FROM rooms_per_area rpa
+        ORDER BY rpa.region, rpa.chain_name, rpa.hotel_name;
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("REFRESH MATERIALIZED VIEW rooms_per_area;")
+            cur.execute(query)
+            rows = cur.fetchall()
+            
+            # Format the response
+            result = []
+            for row in rows:
+                result.append({
+                    "region": row["region"],
+                    "chainName": row["chain_name"],
+                    "hotelName": row["hotel_name"],
+                    "availableRooms": int(row["available_rooms"] or 0),
+                })
+            return result
+    finally:
+        conn.close()
+
 
 def db_get_hotel_capacity():
-    # query = "SELECT * FROM hotel_capacity"  (uses your SQL view)
-    pass
+    """
+    Retrieve the materialized view of aggregated room capacity per hotel.
+    This shows total room capacity grouped by hotel and chain.
+    """
+    query = """
+        SELECT
+            hrc.chain_id,
+            hrc.hotel_id,
+            hrc.hotel_name,
+            hc.chain_name,
+            COALESCE(rc.total_rooms, 0) AS total_rooms,
+            hrc.aggregate_capacity
+        FROM rooms_cap_per_hotel hrc
+        LEFT JOIN hotel_chains hc ON hc.chain_id = hrc.chain_id
+        LEFT JOIN (
+            SELECT chain_id, hotel_id, COUNT(*) AS total_rooms
+            FROM rooms
+            GROUP BY chain_id, hotel_id
+        ) rc ON rc.chain_id = hrc.chain_id AND rc.hotel_id = hrc.hotel_id
+        ORDER BY hrc.chain_id, hrc.hotel_id;
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("REFRESH MATERIALIZED VIEW rooms_cap_per_hotel;")
+            cur.execute(query)
+            rows = cur.fetchall()
+            
+            # Format and enrich the response
+            result = []
+            for row in rows:
+                total_rooms = int(row["total_rooms"] or 0)
+                total_capacity = int(row["aggregate_capacity"] or 0)
+                result.append({
+                    "hotelId": f"hotel-{row['hotel_id']}",
+                    "chainId": f"chain-{row['chain_id']}",
+                    "hotelName": row["hotel_name"],
+                    "chainName": row.get("chain_name") or "Unknown",
+                    "totalRooms": total_rooms,
+                    "totalCapacity": total_capacity,
+                    "averageCapacityPerRoom": (total_capacity / total_rooms) if total_rooms > 0 else 0,
+                })
+            return result
+    finally:
+        conn.close()

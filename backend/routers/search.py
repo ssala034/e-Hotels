@@ -3,35 +3,32 @@ from typing import Optional, List
 from datetime import datetime
 from models import SearchCriteria
 import logging
-from database import db_get_all_rooms, db_get_all_hotels, db_get_all_chains
+from database import (
+    db_search_available_rooms,
+    db_check_room_availability,
+    db_get_all_hotels,
+    db_get_all_chains,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-def _has_date_conflict(room_id: str, check_in: str, check_out: str) -> bool:
-    """Check if a room has a booking/renting conflict for the given dates."""
-    logger.info("mock data removed, to be implemented")
-    return False
-
-
-def _find_hotel(hotel_id: str):
-    logger.info("mock data removed, to be implemented")
-    return None
-
-
-def _find_chain(chain_id: str):
-    logger.info("mock data removed, to be implemented")
-    return None
-
-
 @router.post("/rooms")
 def search_rooms(criteria: SearchCriteria):
-    base_rooms = db_get_all_rooms({
+    """
+    Search for available rooms using database queries.
+    Applies filters from the database view and applies additional client-side filters.
+    """
+    # Use database to get rooms matching price criteria
+    base_rooms = db_search_available_rooms({
         "minPrice": criteria.minPrice,
         "maxPrice": criteria.maxPrice,
+        "checkInDate": criteria.checkInDate,
+        "checkOutDate": criteria.checkOutDate,
     })
+    
     all_hotels = db_get_all_hotels({})
     all_chains = db_get_all_chains()
 
@@ -40,33 +37,32 @@ def search_rooms(criteria: SearchCriteria):
 
     results = list(base_rooms)
 
-    # Filter by date availability (mock booking data currently uses mock room IDs).
-    if criteria.checkInDate and criteria.checkOutDate:
-        results = [
-            r for r in results if not _has_date_conflict(r["id"], criteria.checkInDate, criteria.checkOutDate)
-        ]
-
+    # Apply geographic area filter
     if criteria.area:
         results = [
             r for r in results
-            if (h := hotel_by_id.get(r["hotelId"])) and h["address"]["city"] in criteria.area
+            if (h := hotel_by_id.get(r["hotelId"])) and h["address"]["stateProvince"] in criteria.area
         ]
 
+    # Apply chain filter
     if criteria.chainId:
         results = [
             r for r in results
             if (h := hotel_by_id.get(r["hotelId"])) and h["chainId"] in criteria.chainId
         ]
 
+    # Apply category filter
     if criteria.category:
         results = [
             r for r in results
             if (h := hotel_by_id.get(r["hotelId"])) and h["category"] in criteria.category
         ]
 
+    # Apply capacity filter
     if criteria.capacity:
         results = [r for r in results if r["capacity"] in criteria.capacity]
 
+    # Apply hotel room count filters
     if criteria.minHotelRooms is not None or criteria.maxHotelRooms is not None:
         def _room_count_ok(room):
             hotel = hotel_by_id.get(room["hotelId"])
@@ -80,21 +76,26 @@ def search_rooms(criteria: SearchCriteria):
 
         results = [r for r in results if _room_count_ok(r)]
 
+    # Apply amenities filter
     if criteria.amenities:
         results = [r for r in results if all(a in r.get("amenities", []) for a in criteria.amenities)]
 
+    # Apply view type filter
     if criteria.viewType:
         results = [r for r in results if r["viewType"] in criteria.viewType]
 
+    # Apply extendable filter
     if criteria.extendableOnly:
         results = [r for r in results if r.get("isExtendable")]
 
+    # Exclude damaged rooms filter
     if criteria.excludeDamaged:
         results = [
             r for r in results
             if not r.get("problems") and not r.get("issues")
         ]
 
+    # Enrich results with hotel and chain information
     enriched = []
     for room in results:
         hotel = hotel_by_id.get(room["hotelId"])
@@ -114,5 +115,5 @@ def check_availability(
     checkInDate: str = Query(...),
     checkOutDate: str = Query(...),
 ):
-    available = not _has_date_conflict(roomId, checkInDate, checkOutDate)
+    available = not db_check_room_availability(roomId, checkInDate, checkOutDate)
     return {"available": available}

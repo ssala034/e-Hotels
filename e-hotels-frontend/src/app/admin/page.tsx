@@ -31,10 +31,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toaster';
-import { Building2, Hotel as HotelIcon, DoorOpen, Users, UserCog, Plus, Edit, Trash2, Star, Archive, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { HotelCapacityView } from '@/components/analytics/HotelCapacityView';
+import { Building2, Hotel as HotelIcon, DoorOpen, Users, UserCog, Plus, Edit, Trash2, Star, Archive, AlertTriangle, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
-type TabType = 'chains' | 'hotels' | 'rooms' | 'employees' | 'customers';
+type TabType = 'chains' | 'hotels' | 'rooms' | 'employees' | 'customers' | 'analytics';
 type ModalMode = 'create' | 'edit' | null;
 type DeleteTargetType = 'chain' | 'hotel';
 
@@ -170,6 +171,7 @@ export default function AdminDashboardPage() {
     { id: 'rooms', label: 'Rooms', icon: DoorOpen, count: rooms.length },
     { id: 'employees', label: 'Employees', icon: UserCog, count: employees.length },
     { id: 'customers', label: 'Customers', icon: Users, count: customers.length },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3, count: undefined },
   ];
 
   // Hotel Chain Handlers
@@ -1224,6 +1226,26 @@ export default function AdminDashboardPage() {
                   </Card>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Analytics Tab */}
+          {activeTab === 'analytics' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-2xl font-bold mb-2">Hotel Analytics</h2>
+                <p className="text-muted-foreground">Real-time views of your hotel network capacity and availability</p>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Hotel Capacity by Hotel</CardTitle>
+                  <CardDescription>Total room capacity aggregated by hotel and chain</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <HotelCapacityView />
+                </CardContent>
+              </Card>
             </div>
           )}
         </>

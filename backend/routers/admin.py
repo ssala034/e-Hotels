@@ -29,6 +29,8 @@ from database import (
     db_update_customer,
     db_delete_customer,
     db_get_archived_reservations,
+    db_get_available_rooms_per_area,
+    db_get_hotel_capacity,
 )
 
 router = APIRouter()
@@ -317,45 +319,19 @@ def get_archived_reservations(
 #views
 @router.get("/analytics/rooms-per-area")
 def get_available_rooms_per_area():
-    rooms = db_get_all_rooms({})
-    hotels = db_get_all_hotels({})
-    hotel_by_id = {h["id"]: h for h in hotels}
-    area_data = {}
-    for room in rooms:
-        hotel = hotel_by_id.get(room["hotelId"])
-        if not hotel:
-            continue
-        city = hotel["address"]["city"]
-        if city not in area_data:
-            area_data[city] = {"total": 0, "available": 0}
-        area_data[city]["total"] += 1
-        if room.get("status") == "Available":
-            area_data[city]["available"] += 1
-
-    return [{
-        "area": area,
-        "totalRooms": data["total"],
-        "availableRooms": data["available"],
-        "occupancyRate": ((data["total"] - data["available"]) / data["total"] * 100) if data["total"] > 0 else 0,
-    } for area, data in area_data.items()]
+    """Get available rooms aggregated by geographic area from materialized view."""
+    try:
+        return db_get_available_rooms_per_area()
+    except Exception as exc:
+        logger.error(f"Error fetching rooms per area: {exc}")
+        raise HTTPException(status_code=500, detail=f"Could not fetch rooms per area: {exc}")
 
 
-@router.get("/analytics/hotel-capacity") #shuaib0-0
+@router.get("/analytics/hotel-capacity")
 def get_hotel_capacity_view():
-    hotels = db_get_all_hotels({})
-    chains = {c["id"]: c for c in db_get_all_chains()}
-    rooms = db_get_all_rooms({})
-    capacity_map = {"Single": 1, "Double": 2, "Triple": 3, "Suite": 2, "Family": 4, "Studio": 2}
-    result = []
-    for hotel in hotels:
-        hotel_rooms = [r for r in rooms if r["hotelId"] == hotel["id"]]
-        total_capacity = sum(capacity_map.get(r["capacity"], 2) for r in hotel_rooms)
-        result.append({
-            "hotelId": hotel["id"],
-            "hotelName": hotel["name"],
-            "chainName": chains.get(hotel["chainId"], {}).get("name", "Unknown"),
-            "totalRooms": len(hotel_rooms),
-            "totalCapacity": total_capacity,
-            "averageCapacityPerRoom": (total_capacity / len(hotel_rooms)) if hotel_rooms else 0,
-        })
-    return result
+    """Get hotel capacity aggregated by hotel from materialized view."""
+    try:
+        return db_get_hotel_capacity()
+    except Exception as exc:
+        logger.error(f"Error fetching hotel capacity: {exc}")
+        raise HTTPException(status_code=500, detail=f"Could not fetch hotel capacity: {exc}")

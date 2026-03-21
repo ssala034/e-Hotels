@@ -24,3 +24,6 @@ Need payment functionality, need to have a good flow and when a customer will pa
 review that searching mock
 review booking -> renting -> archive queries
 review payment queries
+might need a condition that chain region = all its hotel regions
+Might need to update how the triggers are used in the backend code
+fix payments in general and on employee dashbaord

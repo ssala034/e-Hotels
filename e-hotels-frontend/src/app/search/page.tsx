@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toaster';
+import { RoomsPerAreaView } from '@/components/analytics/RoomsPerAreaView';
 import {
   Home, ChevronRight, MapPin, Users, Star, Eye,
   Building2, Hotel as HotelIcon, DoorOpen, Info, Search, SlidersHorizontal,
@@ -180,6 +181,22 @@ export default function SearchPage() {
     setSelectedHotel(hotel);
   };
 
+  const handleAreaSelect = (area: string) => {
+    const citiesInArea = Array.from(
+      new Set(
+        allHotels
+          .filter((hotel) => hotel.address?.stateProvince === area)
+          .map((hotel) => hotel.address.city)
+      )
+    );
+
+    setSelectedChain(null);
+    setSelectedHotel(null);
+    setRooms([]);
+    setChainLocationFilter(citiesInArea);
+    setChainMinHotels(0);
+  };
+
   // ── Toggle helpers ──
   const toggle = <T,>(arr: T[], val: T) =>
     arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val];
@@ -241,6 +258,16 @@ export default function SearchPage() {
           )}
         </div>
       </nav>
+
+      {/* ════════════════════════════════════════════════════════════════════
+          AVAILABILITY OVERVIEW
+      ════════════════════════════════════════════════════════════════════ */}
+      {level === 'chains' && (
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold mb-4">Availability Overview by Region</h2>
+          <RoomsPerAreaView onAreaSelect={handleAreaSelect} />
+        </div>
+      )}
 
       {/* ════════════════════════════════════════════════════════════════════
           LEVEL 1 — HOTEL CHAINS
