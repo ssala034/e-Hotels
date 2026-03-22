@@ -176,6 +176,7 @@ class EmployeeData(BaseModel):
     role: str
     hotelId: Optional[str] = None
     chainId: Optional[str] = None
+    hotelName: Optional[str] = None
 
 
 # ============================================================================

@@ -1630,9 +1630,13 @@ def db_create_customer_account(data):
 
 def db_create_employee_for_manager(data, manager_person_id):
     manager_query = """
-        SELECT chain_id, hotel_id
-        FROM employee
-        WHERE person_id = %s AND role = 'Manager'
+        SELECT e.chain_id, e.hotel_id, h.hotel_name
+        FROM employee e
+        JOIN hotels h ON h.chain_id = e.chain_id AND h.hotel_id = e.hotel_id
+        WHERE e.person_id = %s
+          AND e.role = 'Manager'
+          AND e.chain_id = %s
+          AND LOWER(TRIM(h.hotel_name)) = LOWER(TRIM(%s))
         LIMIT 1;
     """
     insert_person_query = """
@@ -1659,10 +1663,16 @@ def db_create_employee_for_manager(data, manager_person_id):
     """
 
     street_number, street_name = _split_street(data["address"].get("street"))
+    target_chain_id = _extract_numeric_id(data.get("chainId"))
+    target_hotel_name = str(data.get("hotelName") or "").strip()
+
+    if target_chain_id is None or not target_hotel_name:
+        return None
+
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(manager_query, (manager_person_id,))
+            cur.execute(manager_query, (manager_person_id, target_chain_id, target_hotel_name))
             manager_assignment = cur.fetchone()
             if not manager_assignment:
                 return None

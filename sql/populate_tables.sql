@@ -217,50 +217,47 @@ UNION ALL
 -- ========================
 -- Manager Employees
 -- ========================
-
-INSERT INTO person (first_name, last_name, ssn_type, ssn_number, country, city, region, email, password)
+INSERT INTO person ( first_name, last_name, ssn_type, ssn_number, country, city, region, street_name, street_number, postalcode, email, password)
 VALUES
-('James',   'Anderson',  'SSN', 'SSN-001', 'Canada', 'Ottawa',      'Ontario', 'james.anderson@hotels.com',  'y5naMM4@7hD|'),
-('Emily',   'Thompson',  'SSN', 'SSN-002', 'Canada', 'Ottawa',      'Ontario', 'emily.thompson@hotels.com', 'T8k#P2zLm9Q!'),
-('Michael', 'Harris',    'SSN', 'SSN-003', 'Canada', 'Ottawa',      'Ontario', 'michael.harris@hotels.com', 'R4v$Xn7@cL2p'),
-('Sarah',   'Martin',    'SSN', 'SSN-004', 'Canada', 'Ottawa',      'Ontario', 'sarah.martin@hotels.com',   'Q9!dF6wZx3@T'),
-('David',   'Wilson',    'SSN', 'SSN-005', 'Canada', 'Vancouver',   'BC',      'david.wilson@hotels.com',   'mE7@Lp2#Xz8K'),
-('Laura',   'Garcia',    'SSN', 'SSN-006', 'Canada', 'Calgary',     'Alberta', 'laura.garcia@hotels.com',   'B5^kW9!qT3yP'),
-('Daniel',  'Martinez',  'SSN', 'SSN-007', 'Canada', 'Halifax',     'NS',      'daniel.martinez@hotels.com','Z2@xCv8!Lm4R'),
-('Sophia',  'Robinson',  'SSN', 'SSN-008', 'Canada', 'Ottawa',      'Ontario', 'sophia.robinson@hotels.com','N7!pQ4@tYx6A'),
-('Chris',   'Clark',     'SSN', 'SSN-009', 'USA',    'Miami',       'Florida', 'chris.clark@hotels.com',    'K3@Lm8!pXz1D'),
-('Olivia',  'Lewis',     'SSN', 'SSN-010', 'USA',    'Miami',       'Florida', 'olivia.lewis@hotels.com',   'P9!zT2xWq7@B'),
-('Ethan',   'Lee',       'SSN', 'SSN-011', 'USA',    'Key West',    'Florida', 'ethan.lee@hotels.com',      'X5@cN8!Lm2Qv'),
-('Ava',     'Walker',    'SSN', 'SSN-012', 'USA',    'Orlando',     'Florida', 'ava.walker@hotels.com',     'D7!rT3@Zx9Lp'),
-('Noah',    'Hall',      'SSN', 'SSN-013', 'USA',    'Tampa',       'Florida', 'noah.hall@hotels.com',      'J4@pLm8!Qx2C'),
-('Mia',     'Allen',     'SSN', 'SSN-014', 'USA',    'New York',    'New York','mia.allen@hotels.com',      'F2!Zx7@Wp9Lt'),
-('Liam',    'Young',     'SSN', 'SSN-015', 'USA',    'Los Angeles', 'California','liam.young@hotels.com',  'A8@Lm3!xQp6D'),
-('Emma',    'Hernandez', 'SSN', 'SSN-016', 'USA',    'Chicago',     'Illinois','emma.hernandez@hotels.com', 'T1!xZ9@Lp4Qv'),
-('Oliver',  'King',      'SSN', 'SSN-017', 'Canada', 'Toronto',     'Ontario', 'oliver.king@hotels.com',    'M6@pX2!qZ8Lt'),
-('Amelia',  'Wright',    'SSN', 'SSN-018', 'Canada', 'Toronto',     'Ontario', 'amelia.wright@hotels.com',  'Q3!Lm7@Xp9Zt'),
-('Lucas',   'Scott',     'SSN', 'SSN-019', 'Canada', 'Toronto',     'Ontario', 'lucas.scott@hotels.com',    'V9@xT2!Lm5Qp'),
-('Harper',  'Torres',    'SSN', 'SSN-020', 'Canada', 'Toronto',     'Ontario', 'harper.torres@hotels.com',  'Z4!pLm8@Xq2D'),
-('Mason',   'Nguyen',    'SSN', 'SSN-021', 'Canada', 'Toronto',     'Ontario', 'mason.nguyen@hotels.com',   'C7@T3!Zx9Lp'),
-('Ella',    'Hill',      'SSN', 'SSN-022', 'Canada', 'Toronto',     'Ontario', 'ella.hill@hotels.com',      'P2!Lm8@xQ7Zv'),
-('Logan',   'Flores',    'SSN', 'SSN-023', 'Canada', 'Toronto',     'Ontario', 'logan.flores@hotels.com',   'Y5@Zx3!Lp8Qt'),
-('Avery',   'Green',     'SSN', 'SSN-024', 'Canada', 'Toronto',     'Ontario', 'avery.green@hotels.com',    'W9!Lm2@Xp7Zq'),
-('Elijah',  'Adams',     'SSN', 'SSN-025', 'France', 'Paris',       'IDF',     'elijah.adams@hotels.com',   'R8@xT3!Lm6Qp'),
-('Scarlett','Baker',     'SSN', 'SSN-026', 'France', 'Paris',       'IDF',     'scarlett.baker@hotels.com', 'N4!Zx9@Lp2Qt'),
-('James',   'Gonzalez',  'SSN', 'SSN-027', 'France', 'Lyon',        'Auvergne','james.gonzalez@hotels.com', 'U7@Lm5!xQ2Zp'),
-('Grace',   'Nelson',    'SSN', 'SSN-028', 'France', 'Nice',        'PAC',     'grace.nelson@hotels.com',   'K3!pZx8@Lm9Qt'),
-('Henry',   'Carter',    'SSN', 'SSN-029', 'France', 'Marseille',   'PAC',     'henry.carter@hotels.com',   'L9@T2!Zx7MpQ'),
-('Zoe',     'Mitchell',  'SSN', 'SSN-030', 'France', 'Bordeaux',    'Nouvelle','zoe.mitchell@hotels.com',   'E6!Lm3@Xp8Zt'),
-('Jack',    'Perez',     'SSN', 'SSN-031', 'France', 'Lille',       'Hauts',   'jack.perez@hotels.com',     'S2@Zx7!Lm5Qp'),
-('Lily',    'Roberts',   'SSN', 'SSN-032', 'France', 'Strasbourg',  'Grand Est','lily.roberts@hotels.com', 'D8!Lp2@Zx9Qt'),
-('Owen',    'Turner',    'SSN', 'SSN-033', 'UK',     'London',      'London',  'owen.turner@hotels.com',    'H3@Lm7!xQ5Zp'),
-('Chloe',   'Phillips',  'SSN', 'SSN-034', 'UK',     'London',      'London',  'chloe.phillips@hotels.com', 'J9!Zx2@Lp8Qt'),
-('Ryan',    'Campbell',  'SSN', 'SSN-035', 'UK',     'Manchester',  'Lancs',   'ryan.campbell@hotels.com',  'G5@Lm3!Xp7Zt'),
-('Nora',    'Parker',    'SSN', 'SSN-036', 'UK',     'Edinburgh',   'Manchester','nora.parker@hotels.com', 'T2!Zx8@Lm4Qp'),
-('Leo',     'Evans',     'SSN', 'SSN-037', 'UK',     'Glasgow',     'London',  'leo.evans@hotels.com',      'Q7@Lp9!Zx3Mt'),
-('Hannah',  'Edwards',   'SSN', 'SSN-038', 'UK',     'Liverpool',   'London',  'hannah.edwards@hotels.com', 'M4!Lm2@Xp8Zq'),
-('Isaac',   'Collins',   'SSN', 'SSN-039', 'UK',     'Birmingham',  'Manchester','isaac.collins@hotels.com','P8@Zx3!Lm7Qt'),
-('Aria',    'Stewart',   'SSN', 'SSN-040', 'UK',     'Bristol',     'London',  'aria.stewart@hotels.com',   'X2!Lm9@Zp5Qt');
-
+('James',    'Anderson',  'SSN', 'SSN-001', 'Canada', 'Ottawa',    'Ontario',      'Maple Street',                  101,  'K1A0A1',  'james.anderson@hotels.com',    'y5naMM4@7hD|'),
+('Emily',    'Thompson',  'SSN', 'SSN-002', 'Canada', 'Ottawa',    'Ontario',      'Oak Avenue',                    202,  'K1A0A2',  'emily.thompson@hotels.com',    'T8k#P2zLm9Q!'),
+('Michael',  'Harris',    'SSN', 'SSN-003', 'Canada', 'Ottawa',    'Ontario',      'Pine Road',                     303,  'K1A0A3',  'michael.harris@hotels.com',    'R4v$Xn7@cL2p'),
+('Sarah',    'Martin',    'SSN', 'SSN-004', 'Canada', 'Ottawa',    'Ontario',      'Cedar Lane',                    404,  'K1A0A4',  'sarah.martin@hotels.com',      'Q9!dF6wZx3@T'),
+('David',    'Wilson',    'SSN', 'SSN-005', 'Canada', 'Vancouver', 'BC',           'Granville St',                  505,  'V5K0A1',  'david.wilson@hotels.com',      'mE7@Lp2#Xz8K'),
+('Laura',    'Garcia',    'SSN', 'SSN-006', 'Canada', 'Calgary',   'Alberta',      '8 Ave SW',                      606,  'T2P1J9',  'laura.garcia@hotels.com',      'B5^kW9!qT3yP'),
+('Daniel',   'Martinez',  'SSN', 'SSN-007', 'Canada', 'Halifax',   'NS',           'Barrington St',                 707,  'B3J2A1',  'daniel.martinez@hotels.com',   'Z2@xCv8!Lm4R'),
+('Sophia',   'Robinson',  'SSN', 'SSN-008', 'Canada', 'Ottawa',    'Ontario',      'Elgin St',                      808,  'K1P5K8',  'sophia.robinson@hotels.com',   'N7!pQ4@tYx6A'),
+('Chris',    'Clark',     'SSN', 'SSN-009', 'USA',    'Miami',     'Florida',      'Ocean Dr',                      909,  '33139',   'chris.clark@hotels.com',       'K3@Lm8!pXz1D'),
+('Olivia',   'Lewis',     'SSN', 'SSN-010', 'USA',    'Miami',     'Florida',      'Collins Ave',                   1010, '33140',   'olivia.lewis@hotels.com',      'P9!zT2xWq7@B'),
+('Ethan',    'Lee',       'SSN', 'SSN-011', 'USA',    'Key West',  'Florida',      'Duval St',                      1111, '33040',   'ethan.lee@hotels.com',         'X5@cN8!Lm2Qv'),
+('Ava',      'Walker',    'SSN', 'SSN-012', 'USA',    'Orlando',   'Florida',      'Orange Ave',                    1212, '32801',   'ava.walker@hotels.com',        'D7!rT3@Zx9Lp'),
+('Noah',     'Hall',      'SSN', 'SSN-013', 'USA',    'Tampa',     'Florida',      'Bayshore Blvd',                 1313, '33606',   'noah.hall@hotels.com',         'J4@pLm8!Qx2C'),
+('Mia',      'Allen',     'SSN', 'SSN-014', 'USA',    'New York',  'New York',     '5th Ave',                       1414, '10001',   'mia.allen@hotels.com',         'F2!Zx7@Wp9Lt'),
+('Liam',     'Young',     'SSN', 'SSN-015', 'USA',    'Los Angeles','California',  'Sunset Blvd',                   1515, '90028',   'liam.young@hotels.com',        'A8@Lm3!xQp6D'),
+('Emma',     'Hernandez', 'SSN', 'SSN-016', 'USA',    'Chicago',   'Illinois',     'Michigan Ave',                  1616, '60601',   'emma.hernandez@hotels.com',    'T1!xZ9@Lp4Qv'),
+('Oliver',   'King',      'SSN', 'SSN-017', 'Canada', 'Toronto',   'Ontario',      'Queen St W',                    1717, 'M5H2N2',  'oliver.king@hotels.com',       'M6@pX2!qZ8Lt'),
+('Lucas',    'Scott',     'SSN', 'SSN-019', 'Canada', 'Toronto',   'Ontario',      'Bloor St',                      1919, 'M4W1A8',  'lucas.scott@hotels.com',       'V9@xT2!Lm5Qp'),
+('Harper',   'Torres',    'SSN', 'SSN-020', 'Canada', 'Toronto',   'Ontario',      'Yonge St',                      2020, 'M5B2H1',  'harper.torres@hotels.com',     'Z4!pLm8@Xq2D'),
+('Mason',    'Nguyen',    'SSN', 'SSN-021', 'Canada', 'Toronto',   'Ontario',      'Dundas St',                     2121, 'M5G1C3',  'mason.nguyen@hotels.com',      'C7@T3!Zx9Lp'),
+('Ella',     'Hill',      'SSN', 'SSN-022', 'Canada', 'Toronto',   'Ontario',      'Spadina Ave',                   2222, 'M5T2E9',  'ella.hill@hotels.com',         'P2!Lm8@xQ7Zv'),
+('Logan',    'Flores',    'SSN', 'SSN-023', 'Canada', 'Toronto',   'Ontario',      'Front St',                      2323, 'M5V2Y1',  'logan.flores@hotels.com',      'Y5@Zx3!Lp8Qt'),
+('Avery',    'Green',     'SSN', 'SSN-024', 'Canada', 'Toronto',   'Ontario',      'Bay St',                        2424, 'M5J2N8',  'avery.green@hotels.com',       'W9!Lm2@Xp7Zq'),
+('Elijah',   'Adams',     'SSN', 'SSN-025', 'France', 'Paris',     'IDF',          'Rue de Rivoli',                 25,   '75001',   'elijah.adams@hotels.com',      'R8@xT3!Lm6Qp'),
+('Scarlett', 'Baker',     'SSN', 'SSN-026', 'France', 'Paris',     'IDF',          'Boulevard Saint-Germain',       26,   '75006',   'scarlett.baker@hotels.com',    'N4!Zx9@Lp2Qt'),
+('James',    'Gonzalez',  'SSN', 'SSN-027', 'France', 'Lyon',      'Auvergne',     'Rue Merciere',                  27,   '69002',   'james.gonzalez@hotels.com',    'U7@Lm5!xQ2Zp'),
+('Grace',    'Nelson',    'SSN', 'SSN-028', 'France', 'Nice',      'PAC',          'Promenade des Anglais',         28,   '06000',   'grace.nelson@hotels.com',      'K3!pZx8@Lm9Qt'),
+('Henry',    'Carter',    'SSN', 'SSN-029', 'France', 'Marseille', 'PAC',          'La Canebiere',                  29,   '13001',   'henry.carter@hotels.com',      'L9@T2!Zx7MpQ'),
+('Zoe',      'Mitchell',  'SSN', 'SSN-030', 'France', 'Bordeaux',  'Nouvelle',     'Rue Sainte-Catherine',          30,   '33000',   'zoe.mitchell@hotels.com',      'E6!Lm3@Xp8Zt'),
+('Jack',     'Perez',     'SSN', 'SSN-031', 'France', 'Lille',     'Hauts',        'Rue de Bethune',                31,   '59000',   'jack.perez@hotels.com',        'S2@Zx7!Lm5Qp'),
+('Lily',     'Roberts',   'SSN', 'SSN-032', 'France', 'Strasbourg','Grand Est',    'Rue des Grandes Arcades',       32,   '67000',   'lily.roberts@hotels.com',      'D8!Lp2@Zx9Qt'),
+('Owen',     'Turner',    'SSN', 'SSN-033', 'UK',     'London',    'London',       'Baker St',                      33,   'NW16XE',  'owen.turner@hotels.com',       'H3@Lm7!xQ5Zp'),
+('Chloe',    'Phillips',  'SSN', 'SSN-034', 'UK',     'London',    'London',       'Oxford St',                     34,   'W1D1BS',  'chloe.phillips@hotels.com',    'J9!Zx2@Lp8Qt'),
+('Ryan',     'Campbell',  'SSN', 'SSN-035', 'UK',     'Manchester','Lancs',        'Deansgate',                     35,   'M31AZ',   'ryan.campbell@hotels.com',     'G5@Lm3!Xp7Zt'),
+('Nora',     'Parker',    'SSN', 'SSN-036', 'UK',     'Edinburgh', 'Scotland',     'Royal Mile',                    36,   'EH12NG',  'nora.parker@hotels.com',       'T2!Zx8@Lm4Qp'),
+('Leo',      'Evans',     'SSN', 'SSN-037', 'UK',     'Glasgow',   'Scotland',     'George St',                     37,   'G12FF',   'leo.evans@hotels.com',         'Q7@Lp9!Zx3Mt'),
+('Hannah',   'Edwards',   'SSN', 'SSN-038', 'UK',     'Liverpool', 'England',      'Bold St',                       38,   'L14HR',   'hannah.edwards@hotels.com',    'M4!Lm2@Xp8Zq'),
+('Isaac',    'Collins',   'SSN', 'SSN-039', 'UK',     'Birmingham','England',      'New St',                        39,   'B21LP',   'isaac.collins@hotels.com',     'P8@Zx3!Lm7Qt'),
+('Aria',     'Stewart',   'SSN', 'SSN-040', 'UK',     'Bristol',   'England',      'Park St',                       40,   'BS15AH',  'aria.stewart@hotels.com',      'X2!Lm9@Zp5Qt');
 
 INSERT INTO employee (person_id, chain_id, hotel_id, role)
 SELECT 
@@ -279,6 +276,15 @@ UPDATE hotels
 SET manager_id = e.person_id
 FROM employee e
 WHERE hotels.chain_id = e.chain_id AND hotels.hotel_id = e.hotel_id AND e.role = 'Manager';
+
+
+-- Set one employee to be manager of 2 hotels
+UPDATE hotels
+SET manager_id = 1
+FROM employee e
+WHERE hotels.chain_id = 3 AND hotels.hotel_name = 'The Ritz Toronto';
+
+
 
 -- select hotels.chain_id, hotels.hotel_id, hotels.hotel_name,  from hotels join rooms using (chain_id, hotel_id);
 -- select * from hotel_chains;

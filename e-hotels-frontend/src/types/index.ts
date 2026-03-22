@@ -67,6 +67,7 @@ export interface Employee {
   ssnSin: string;
   role: EmployeeRole;
   hotelId: string;
+  chainId?: string;
   hotel?: Hotel;
 }
 
@@ -317,6 +318,7 @@ export interface EmployeeData {
   role: EmployeeRole;
   hotelId?: string;
   chainId?: string;
+  hotelName?: string;
 }
 
 export interface CustomerData {

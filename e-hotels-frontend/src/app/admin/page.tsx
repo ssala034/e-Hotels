@@ -110,6 +110,8 @@ export default function AdminDashboardPage() {
     email: '',
     password: '',
     role: 'Receptionist' as EmployeeRole,
+    chainId: '',
+    hotelName: '',
     street: '',
     city: '',
     stateProvince: '',
@@ -140,14 +142,19 @@ export default function AdminDashboardPage() {
         throw new Error('Manager scope is missing chain/hotel assignment');
       }
 
-      const [chainsData, hotelsData, roomsData, employeesData, customersData, archivedData] = await Promise.all([
-        getChainById(managerChainId).then((chain) => (chain ? [chain] : [])),
+      const [hotelsData, roomsData, employeesData, customersData, archivedData] = await Promise.all([
         getAllHotels({ managerId: managerPersonId }),
         getAllRooms({ hotelId: managerHotelId }),
         getAllEmployees({ hotelId: managerHotelId }),
         getAllCustomers({ chainId: managerChainId, hotelId: managerHotelId }),
         getArchivedReservations({ chainId: managerChainId, hotelId: managerHotelId }),
       ]);
+
+      const uniqueChainIds = Array.from(new Set(hotelsData.map((hotel) => hotel.chainId)));
+      const chainsData = (
+        await Promise.all(uniqueChainIds.map((chainId) => getChainById(chainId)))
+      ).filter((chain): chain is HotelChain => !!chain);
+
       setChains(chainsData);
       setHotels(hotelsData);
       setRooms(roomsData);
@@ -410,6 +417,20 @@ export default function AdminDashboardPage() {
       return;
     }
 
+    const normalizedHotelName = employeeForm.hotelName.trim().toLowerCase();
+    const targetHotel = hotels.find(
+      (hotel) => hotel.chainId === employeeForm.chainId && hotel.name.trim().toLowerCase() === normalizedHotelName,
+    );
+
+    if (!targetHotel) {
+      toast({
+        title: 'Error',
+        description: 'The provided chain ID and hotel name do not match any hotel you manage.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       await createEmployee({
         firstName: employeeForm.firstName,
@@ -419,6 +440,9 @@ export default function AdminDashboardPage() {
         role: employeeForm.role,
         ssnSin: employeeForm.idNumber,
         idType: employeeForm.idType,
+        chainId: employeeForm.chainId,
+        hotelId: targetHotel.id,
+        hotelName: targetHotel.name,
         address: {
           street: employeeForm.street,
           city: employeeForm.city,
@@ -492,6 +516,36 @@ export default function AdminDashboardPage() {
   const managedHotelKeys = useMemo(() => {
     return new Set(hotels.map((hotel) => `${hotel.chainId}::${hotel.name.toLowerCase()}`));
   }, [hotels]);
+
+  const managedChainOptions = useMemo(() => {
+    return Array.from(new Set(hotels.map((hotel) => hotel.chainId))).sort();
+  }, [hotels]);
+
+  const managedHotelsForSelectedChain = useMemo(() => {
+    if (!employeeForm.chainId) return [];
+    return hotels
+      .filter((hotel) => hotel.chainId === employeeForm.chainId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [hotels, employeeForm.chainId]);
+
+  useEffect(() => {
+    if (modalMode !== 'create') return;
+
+    if (managedHotelsForSelectedChain.length === 0) {
+      if (employeeForm.hotelName) {
+        setEmployeeForm((prev) => ({ ...prev, hotelName: '' }));
+      }
+      return;
+    }
+
+    const selectedHotelStillValid = managedHotelsForSelectedChain.some(
+      (hotel) => hotel.name === employeeForm.hotelName,
+    );
+
+    if (!selectedHotelStillValid) {
+      setEmployeeForm((prev) => ({ ...prev, hotelName: managedHotelsForSelectedChain[0].name }));
+    }
+  }, [modalMode, managedHotelsForSelectedChain, employeeForm.hotelName]);
 
   const managedArchivedReservations = useMemo(() => {
     const scoped = archivedReservations.filter((reservation) =>
@@ -1016,6 +1070,12 @@ export default function AdminDashboardPage() {
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">Employees</h2>
                 <Button onClick={() => {
+                  const preferredChainId =
+                    (user?.chainId && hotels.some((hotel) => hotel.chainId === user.chainId) ? user.chainId : '') ||
+                    hotels[0]?.chainId ||
+                    '';
+                  const preferredHotelName = hotels.find((hotel) => hotel.chainId === preferredChainId)?.name || '';
+
                   setModalMode('create');
                   setEmployeeForm({
                     firstName: '',
@@ -1023,6 +1083,8 @@ export default function AdminDashboardPage() {
                     email: '',
                     password: '',
                     role: 'Receptionist' as EmployeeRole,
+                    chainId: preferredChainId,
+                    hotelName: preferredHotelName,
                     street: '',
                     city: '',
                     stateProvince: '',
@@ -1082,6 +1144,39 @@ export default function AdminDashboardPage() {
                             <option value="Concierge">Concierge</option>
                           </select>
                         </div>
+                        {modalMode === 'create' && (
+                          <>
+                            <div className="space-y-2">
+                              <Label>Chain ID</Label>
+                              <select
+                                value={employeeForm.chainId}
+                                onChange={(e) => setEmployeeForm({ ...employeeForm, chainId: e.target.value })}
+                                required
+                                className={selectClassName}
+                              >
+                                {managedChainOptions.length === 0 && <option value="">No available chains</option>}
+                                {managedChainOptions.map((chainId) => (
+                                  <option key={chainId} value={chainId}>{chainId}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Hotel Name</Label>
+                              <select
+                                value={employeeForm.hotelName}
+                                onChange={(e) => setEmployeeForm({ ...employeeForm, hotelName: e.target.value })}
+                                required
+                                className={selectClassName}
+                                disabled={managedHotelsForSelectedChain.length === 0}
+                              >
+                                {managedHotelsForSelectedChain.length === 0 && <option value="">No available hotels</option>}
+                                {managedHotelsForSelectedChain.map((hotel) => (
+                                  <option key={hotel.id} value={hotel.name}>{hotel.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </>
+                        )}
                         <div className="space-y-2">
                           <Label>ID Type</Label>
                           <select
@@ -1146,9 +1241,11 @@ export default function AdminDashboardPage() {
                           />
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        New employee will be assigned to your managed property ({user?.chainId || 'N/A'} / {user?.hotelId || 'N/A'}).
-                      </p>
+                      {modalMode === 'create' && (
+                        <p className="text-sm text-muted-foreground">
+                          Select an existing chain and hotel to assign this employee.
+                        </p>
+                      )}
                       <div className="flex gap-2">
                         <Button type="submit">{modalMode === 'create' ? 'Create Employee' : 'Update Employee'}</Button>
                         <Button type="button" variant="outline" onClick={() => { setModalMode(null); setSelectedEmployee(null); }}>Cancel</Button>
@@ -1159,14 +1256,20 @@ export default function AdminDashboardPage() {
               )}
 
               <div className="space-y-3">
-                {employees.map((employee) => (
+                {employees.map((employee) => {
+                  const hotelName = hotels.find((h) => h.id === employee.hotelId)?.name;
+                  console.log('Employee:', employee.firstName, 'hotelId:', employee.hotelId, 'hotelName:', hotelName, 'hotels available:', hotels.map(h => h.id));
+                  return (
                   <Card key={employee.id}>
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="font-semibold">{employee.firstName} {employee.lastName}</h3>
                           <p className="text-sm text-muted-foreground">{employee.email}</p>
-                          <Badge variant="secondary" className="mt-1">{employee.role}</Badge>
+                          <div className="flex gap-2 mt-1">
+                            <Badge variant="secondary">{employee.role}</Badge>
+                            {hotelName && <Badge variant="outline">{hotelName}</Badge>}
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <Button size="sm" variant="outline" onClick={() => {
@@ -1178,6 +1281,8 @@ export default function AdminDashboardPage() {
                               email: employee.email,
                               password: '',
                               role: employee.role,
+                              chainId: employee.chainId || '',
+                              hotelName: employee.hotel?.name || '',
                               street: employee.address.street,
                               city: employee.address.city,
                               stateProvince: employee.address.stateProvince,
@@ -1196,7 +1301,8 @@ export default function AdminDashboardPage() {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                );
+                })}
               </div>
             </div>
           )}

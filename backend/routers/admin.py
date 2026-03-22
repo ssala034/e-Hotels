@@ -225,7 +225,7 @@ def create_employee(data: EmployeeData, managerPersonId: int = Query(..., ge=1))
         new_emp = db_create_employee_for_manager(data.model_dump(), managerPersonId)
         if not new_emp:
             logger.warning("POST /api/employees unauthorized manager_person_id=%s", managerPersonId)
-            raise HTTPException(status_code=403, detail="Only a logged-in manager can create employees")
+            raise HTTPException(status_code=403, detail="Manager is not assigned to the provided chain ID and hotel name")
         logger.info("POST /api/employees success person_id=%s role=%s", new_emp["personId"], new_emp["role"])
         return new_emp
     except HTTPException:
