@@ -85,6 +85,10 @@ export async function checkRoomAvailability(
   return result.available;
 }
 
+export async function getChainAveragePrices(chainId: string): Promise<{ chainId: string; hotels: Array<{ hotel_id: number; average_room_price: number }> }> {
+  return fetchApi<{ chainId: string; hotels: Array<{ hotel_id: number; average_room_price: number }> }>(`/api/search/chains/${encodeURIComponent(chainId)}/average-price`);
+}
+
 // ============================================================================
 // BOOKING API
 // ============================================================================

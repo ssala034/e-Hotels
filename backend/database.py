@@ -3269,3 +3269,30 @@ def db_get_hotel_capacity():
             return result
     finally:
         conn.close()
+
+
+def db_get_avg_price_by_chain(chain_id):
+    """
+    Get the average room price for all hotels in a given chain.
+    """
+    numeric_chain_id = _extract_numeric_id(chain_id)
+    if numeric_chain_id is None:
+        return []
+
+    query = """
+        SELECT
+            h.hotel_id,
+            AVG(r.price) AS average_room_price
+        FROM rooms r
+        JOIN hotels h ON r.hotel_id = h.hotel_id
+        WHERE h.chain_id = %s
+        GROUP BY h.hotel_id;
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, (numeric_chain_id,))
+            return cur.fetchall()
+    finally:
+        conn.close()

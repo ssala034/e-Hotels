@@ -8,6 +8,7 @@ from database import (
     db_check_room_availability,
     db_get_all_hotels,
     db_get_all_chains,
+    db_get_avg_price_by_chain,
 )
 
 logger = logging.getLogger(__name__)
@@ -117,3 +118,14 @@ def check_availability(
 ):
     available = not db_check_room_availability(roomId, checkInDate, checkOutDate)
     return {"available": available}
+
+
+@router.get("/chains/{chain_id}/average-price")
+def get_chain_average_prices(chain_id: str):
+    """
+    Get average room prices for all hotels in a given chain.
+    """
+    results = db_get_avg_price_by_chain(chain_id)
+    if not results:
+        raise HTTPException(status_code=404, detail="Chain not found or no rooms available")
+    return {"chainId": chain_id, "hotels": results}
