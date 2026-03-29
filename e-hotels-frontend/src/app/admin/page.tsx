@@ -586,18 +586,16 @@ export default function AdminDashboardPage() {
     switch (status) {
       case 'Paid':
         return 'success';
-      case 'Partially Paid':
-        return 'warning';
       case 'Unpaid':
-        return 'destructive';
-      case 'Refunded':
       default:
-        return 'secondary';
+        return 'destructive';
     }
   };
 
   const renderArchivedReservationCard = (reservation: ArchivedReservation, isOrphaned: boolean = false) => {
     const isExpanded = !!expandedArchivedReservationIds[reservation.id];
+    const derivedPaymentStatus: ArchivedReservation['paymentStatus'] =
+      reservation.amountPaid !== null && reservation.amountPaid > 0 ? 'Paid' : 'Unpaid';
 
     return (
       <Card key={reservation.id}>
@@ -618,7 +616,7 @@ export default function AdminDashboardPage() {
                 </Badge>
               )}
               <Badge variant={getReservationStatusVariant(reservation.reservationStatus)}>{reservation.reservationStatus}</Badge>
-              <Badge variant={getPaymentStatusVariant(reservation.paymentStatus)}>{reservation.paymentStatus}</Badge>
+              <Badge variant={getPaymentStatusVariant(derivedPaymentStatus)}>{derivedPaymentStatus}</Badge>
               <Button
                 size="sm"
                 variant="outline"
@@ -671,7 +669,9 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <p className="text-muted-foreground">Amount Paid</p>
-                <p className="font-medium">{formatCurrency(reservation.amountPaid)}</p>
+                <p className="font-medium">
+                  {reservation.amountPaid !== null ? formatCurrency(reservation.amountPaid) : 'N/A'}
+                </p>
               </div>
               <div className="md:col-span-2">
                 <p className="text-muted-foreground">Archive Reason</p>

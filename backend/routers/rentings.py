@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from models import RentingData, WalkInRentingData
 from database import (
     db_create_renting,
@@ -7,6 +7,7 @@ from database import (
     db_get_rentings_by_customer,
     db_get_rentings_by_hotel,
     db_get_renting_by_id,
+    db_archive_renting,
 )
 
 router = APIRouter()
@@ -60,3 +61,17 @@ def get_renting_by_id(renting_id: str):
     if not renting:
         raise HTTPException(status_code=404, detail="Renting not found")
     return renting
+
+
+@router.delete("/{renting_id}")
+def archive_renting(renting_id: str, employeeId: str = Query(...)):
+    try:
+        archived = db_archive_renting(renting_id, employeeId)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not archive renting: {exc}")
+
+    if not archived:
+        raise HTTPException(status_code=404, detail="Renting not found or not authorized")
+    return {"message": "Renting archived"}

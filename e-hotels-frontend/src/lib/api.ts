@@ -183,6 +183,11 @@ export async function getRentingById(rentingId: string): Promise<Renting | null>
   return fetchApi<Renting>(`/api/rentings/${encodeURIComponent(rentingId)}`);
 }
 
+export async function archiveRenting(rentingId: string, employeeId: string): Promise<void> {
+  const qs = toQueryString({ employeeId });
+  await fetchApi(`/api/rentings/${encodeURIComponent(rentingId)}${qs}`, { method: 'DELETE' });
+}
+
 // ============================================================================
 // PAYMENT API
 // ============================================================================

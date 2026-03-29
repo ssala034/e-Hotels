@@ -205,7 +205,7 @@ def _map_booking_row(row):
 def _map_renting_row(row):
     room_id = f"room-{row['chain_id']}-{row['hotel_id']}-{row['room_num'].strip()}"
     status = "Completed" if row["status"] in ("CheckedOut", "Completed") else "Active"
-    amount_paid = float(row["total_price"] or 0) if status == "Completed" else 0.0
+    amount_paid = float(row["price_paid"] or 0) if status == "Completed" else 0.0
     return {
         "id": f"rent-{row['reservation_id']}",
         "customerId": f"cust-{row['customer_person_id']}",
@@ -216,7 +216,7 @@ def _map_renting_row(row):
         "employeeId": f"emp-{row['employee_person_id']}" if row["employee_person_id"] else "",
         "bookingId": f"book-{row['converted_from_res_id']}" if row["converted_from_res_id"] else None,
         "createdAt": row["created_at"].isoformat(),
-        "totalAmount": float(row["total_price"] or 0),
+        "totalAmount": float(row["rental_price"] or 0),
         "amountPaid": amount_paid,
         "room": {
             "id": room_id,
@@ -275,6 +275,7 @@ def _map_archived_reservation_row(row):
         "CheckedIn": "Converted",
         "Confirmed": "Converted",
     }
+    archived_price_paid = row.get("archived_price_paid")
     return {
         "id": f"arch-{row['archive_id']}",
         "chainId": f"chain-{row['chain_id']}" if row.get("chain_id") is not None else "",
@@ -288,10 +289,10 @@ def _map_archived_reservation_row(row):
         "checkOutDate": row["res_end_date"].isoformat() if row.get("res_end_date") else datetime.utcnow().date().isoformat(),
         "archivedAt": row["archive_date"].isoformat(),
         "reservationStatus": status_map.get(row.get("archived_status"), "Completed"),
-        "paymentStatus": "Paid" if float(row.get("archived_price_paid") or 0) > 0 else "Unpaid",
+        "paymentStatus": "Paid" if archived_price_paid is not None else "Unpaid",
         "source": "Booking" if row.get("archived_type") == "booking" else "Walk-In",
-        "totalAmount": float(row.get("archived_price_paid") or 0),
-        "amountPaid": float(row.get("archived_price_paid") or 0),
+        "totalAmount": float(archived_price_paid or 0),
+        "amountPaid": float(archived_price_paid) if archived_price_paid is not None else None,
         "reasonArchived": row.get("archived_subtype") or "Historical reservation record",
         "notes": None,
     }
@@ -616,8 +617,8 @@ def db_delete_chain(chain_id):
                     CURRENT_TIMESTAMP,
                     hr.created_at,
                     CASE
-                        WHEN hr.reservation_type = 'renting' THEN COALESCE(hrt.total_price, hrt.rental_price)
-                        ELSE hb.future_price
+                        WHEN hr.reservation_type = 'renting' THEN hrt.price_paid
+                        ELSE NULL
                     END,
                     h.hotel_name,
                     hc.chain_name,
@@ -980,8 +981,8 @@ def db_delete_hotel(hotel_id):
                     CURRENT_TIMESTAMP,
                     hr.created_at,
                     CASE
-                        WHEN hr.reservation_type = 'renting' THEN COALESCE(hrt.total_price, hrt.rental_price)
-                        ELSE hb.future_price
+                        WHEN hr.reservation_type = 'renting' THEN hrt.price_paid
+                        ELSE NULL
                     END,
                     h.hotel_name,
                     hc.chain_name,
@@ -1413,8 +1414,8 @@ def db_delete_room(room_id):
                     CURRENT_TIMESTAMP,
                     hr.created_at,
                     CASE
-                        WHEN hr.reservation_type = 'renting' THEN COALESCE(hrt.total_price, hrt.rental_price)
-                        ELSE hb.future_price
+                        WHEN hr.reservation_type = 'renting' THEN COALESCE(hrt.price_paid, NULL)
+                        ELSE NULL
                     END,
                     h.hotel_name,
                     hc.chain_name,
@@ -2137,8 +2138,8 @@ def db_delete_customer(customer_id):
                     CURRENT_TIMESTAMP,
                     hr.created_at,
                     CASE
-                        WHEN hr.reservation_type = 'renting' THEN COALESCE(hrt.total_price, hrt.rental_price)
-                        ELSE hb.future_price
+                        WHEN hr.reservation_type = 'renting' THEN COALESCE(hrt.price_paid, NULL)
+                        ELSE NULL
                     END,
                     h.hotel_name,
                     hc.chain_name,
@@ -2356,7 +2357,7 @@ def db_create_booking(data):
     """
     insert_booking = """
         INSERT INTO hotel_booking (reservation_id, booked_date, future_price)
-        VALUES (%s, CURRENT_TIMESTAMP, ((%s::date - %s::date) * %s));
+        VALUES (%s, CURRENT_TIMESTAMP, ((%s::date - %s::date) * %s * 1.23));
     """
     insert_has = """
         INSERT INTO has (chain_id, hotel_id, room_num, reservation_id)
@@ -2414,16 +2415,195 @@ def db_cancel_booking(booking_id):
         return False
 
     query = """
-        UPDATE hotel_reservation
-        SET status = 'Cancelled'
-        WHERE reservation_id = %s
-          AND reservation_type = 'booking'
-          AND status IN ('Pending', 'Confirmed');
+        WITH booking_to_cancel AS (
+            SELECT 
+                hr.reservation_id,
+                hr.created_at,
+                h.hotel_name,
+                hc.chain_name,
+                hr.room_num,
+                hr.person_id AS customer_id,
+                p.first_name || ' ' || p.last_name AS customer_name,
+                hr.status,
+                hr.reservation_type,
+                hb.booked_date,
+                hr.start_date,
+                hr.end_date
+            FROM "HotelProject".hotel_reservation hr
+            JOIN "HotelProject".hotel_booking hb ON hr.reservation_id = hb.reservation_id
+            JOIN "HotelProject".rooms r ON hr.chain_id = r.chain_id AND hr.hotel_id = r.hotel_id AND TRIM(r.room_num) = TRIM(hr.room_num)
+            JOIN "HotelProject".hotels h ON r.chain_id = h.chain_id AND r.hotel_id = h.hotel_id
+            JOIN "HotelProject".hotel_chains hc ON h.chain_id = hc.chain_id
+            JOIN "HotelProject".person p ON hr.person_id = p.person_id
+            WHERE hr.reservation_id = %s
+        ),
+        archived AS (
+            INSERT INTO "HotelProject".archived_reservation (
+                creation_date,
+                archived_price_paid,
+                archived_hotel_name,
+                archived_chain_name,
+                archived_room_num,
+                archived_customer_id,
+                archived_customer_name,
+                archived_status,
+                archived_type,
+                archived_subtype,
+                archived_booked_date,
+                res_start_date,
+                res_end_date
+            )
+            SELECT
+                created_at,
+                NULL,
+                hotel_name,
+                chain_name,
+                room_num,
+                customer_id,
+                customer_name,
+                status,
+                reservation_type,
+                'cancelled_booking',
+                booked_date,
+                start_date,
+                end_date
+            FROM booking_to_cancel
+            RETURNING 1
+        ),
+        delete_has AS (
+            DELETE FROM "HotelProject".has
+            WHERE reservation_id IN (SELECT reservation_id FROM booking_to_cancel)
+            RETURNING 1
+        )
+        DELETE FROM "HotelProject".hotel_reservation
+        WHERE reservation_id IN (SELECT reservation_id FROM booking_to_cancel);
     """
+
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(query, (reservation_id,))
+            if cur.rowcount == 0:
+                conn.rollback()
+                return False
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def db_archive_renting(renting_id, employee_id):
+    reservation_id = _extract_numeric_id(renting_id)
+    employee_person_id = _extract_numeric_id(employee_id)
+    if reservation_id is None or employee_person_id is None:
+        return False
+
+    query = """
+        WITH renting_to_archive AS (
+            SELECT
+                hr.reservation_id,
+                hr.chain_id,
+                hr.hotel_id,
+                hr.room_num,
+                hr.created_at,
+                hr.person_id AS customer_id,
+                hr.status,
+                hr.reservation_type,
+                hr.converted_from_res_id,
+                hr.start_date,
+                hr.end_date,
+                h.hotel_name,
+                hc.chain_name,
+                hrt.checked_in_time,
+                hrt.checked_out_time,
+                hrt.price_paid,
+                hrt.person_id AS renting_employee_id,
+                p.first_name || ' ' || p.last_name AS customer_name
+            FROM hotel_reservation hr
+            JOIN hotel_renting hrt ON hrt.reservation_id = hr.reservation_id
+            JOIN hotels h ON h.chain_id = hr.chain_id AND h.hotel_id = hr.hotel_id
+            JOIN hotel_chains hc ON hc.chain_id = hr.chain_id
+            JOIN person p ON p.person_id = hr.person_id
+            WHERE hr.reservation_id = %s
+              AND hr.reservation_type = 'renting'
+              AND EXISTS (
+                  SELECT 1
+                  FROM employee e
+                  WHERE e.person_id = %s
+                    AND e.chain_id = hr.chain_id
+                    AND e.hotel_id = hr.hotel_id
+              )
+        ),
+        archived AS (
+            INSERT INTO archived_reservation (
+                archive_date,
+                creation_date,
+                archived_price_paid,
+                archived_hotel_name,
+                archived_chain_name,
+                archived_room_num,
+                archived_customer_id,
+                archived_employee_id,
+                archived_customer_name,
+                archived_status,
+                archived_type,
+                archived_subtype,
+                archived_checked_in,
+                archived_checked_out,
+                archived_booked_date,
+                res_start_date,
+                res_end_date
+            )
+            SELECT
+                CURRENT_TIMESTAMP,
+                created_at,
+                COALESCE(price_paid, 0),
+                hotel_name,
+                chain_name,
+                room_num,
+                customer_id,
+                %s,
+                customer_name,
+                status,
+                reservation_type,
+                CASE
+                    WHEN converted_from_res_id IS NOT NULL THEN 'converted_from_booking'
+                    WHEN status IN ('Completed', 'CheckedOut') THEN 'completed_renting'
+                    ELSE 'direct_renting'
+                END,
+                checked_in_time,
+                checked_out_time,
+                NULL,
+                start_date,
+                end_date
+            FROM renting_to_archive
+            RETURNING archive_id
+        ),
+        update_room AS (
+            UPDATE rooms r
+            SET status = 'Available'
+            FROM renting_to_archive ra
+            WHERE r.chain_id = ra.chain_id
+              AND r.hotel_id = ra.hotel_id
+              AND TRIM(r.room_num) = TRIM(ra.room_num)
+            RETURNING r.room_num
+        ),
+        delete_has AS (
+            DELETE FROM has
+            WHERE reservation_id IN (SELECT reservation_id FROM renting_to_archive)
+            RETURNING reservation_id
+        )
+        DELETE FROM hotel_reservation
+        WHERE reservation_id IN (SELECT reservation_id FROM renting_to_archive);
+    """
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query, (reservation_id, employee_person_id, employee_person_id))
             if cur.rowcount == 0:
                 conn.rollback()
                 return False
@@ -2471,6 +2651,14 @@ def db_convert_booking_to_renting(booking_id, employee_id):
           AND hr.status = 'Confirmed'
         LIMIT 1;
     """
+    employee_hotel_check = """
+        SELECT 1
+        FROM employee
+        WHERE person_id = %s
+          AND chain_id = %s
+          AND hotel_id = %s
+        LIMIT 1;
+    """
     archive_booking = """
         INSERT INTO archived_reservation (
             archive_date,
@@ -2512,12 +2700,12 @@ def db_convert_booking_to_renting(booking_id, employee_id):
         );
     """
     insert_renting = """
-        INSERT INTO hotel_renting (reservation_id, checked_in_time, rental_price, total_price, person_id)
-        VALUES (%s, CURRENT_TIMESTAMP, %s, ((%s::date - %s::date) * %s), %s)
+        INSERT INTO hotel_renting (reservation_id, checked_in_time, rental_price, price_paid, person_id)
+        VALUES (%s, CURRENT_TIMESTAMP, ((%s::date - %s::date) * %s), NULL, %s)
         ON CONFLICT (reservation_id) DO UPDATE
         SET
             rental_price = EXCLUDED.rental_price,
-            total_price = EXCLUDED.total_price,
+            price_paid = EXCLUDED.price_paid,
             person_id = EXCLUDED.person_id;
     """
     update_reservation = """
@@ -2543,16 +2731,20 @@ def db_convert_booking_to_renting(booking_id, employee_id):
                 conn.rollback()
                 return None
 
+            cur.execute(employee_hotel_check, (employee_person_id, row["chain_id"], row["hotel_id"]))
+            if not cur.fetchone():
+                conn.rollback()
+                raise ValueError("Employee is not authorized to check in this booking")
+
             customer_name = " ".join(
                 part for part in [row.get("first_name"), row.get("last_name")] if part
             ).strip() or "Unknown Customer"
-            booking_total = float(row.get("future_price") or 0)
 
             cur.execute(
                 archive_booking,
                 (
                     row["created_at"],
-                    booking_total,
+                    None,  # No price paid for the original booking
                     row.get("hotel_name"),
                     row.get("chain_name"),
                     row["room_num"].strip(),
@@ -2570,7 +2762,6 @@ def db_convert_booking_to_renting(booking_id, employee_id):
                 insert_renting,
                 (
                     reservation_id,
-                    row["price"],
                     row["end_date"].isoformat(),
                     row["start_date"].isoformat(),
                     row["price"],
@@ -2654,7 +2845,7 @@ def db_get_all_rentings():
             hr.converted_from_res_id,
             hrt.person_id AS employee_person_id,
             hrt.rental_price,
-            hrt.total_price,
+            hrt.price_paid,
             r.price AS room_price,
             r.capacity,
             r.view,
@@ -2795,8 +2986,8 @@ def db_create_renting(data):
         RETURNING reservation_id;
     """
     insert_rent = """
-        INSERT INTO hotel_renting (reservation_id, checked_in_time, rental_price, total_price, person_id)
-        VALUES (%s, CURRENT_TIMESTAMP, %s, ((%s::date - %s::date) * %s), %s);
+        INSERT INTO hotel_renting (reservation_id, checked_in_time, rental_price, price_paid, person_id)
+        VALUES (%s, CURRENT_TIMESTAMP, ((%s::date - %s::date) * %s), NULL, %s);
     """
     insert_has = "INSERT INTO has (chain_id, hotel_id, room_num, reservation_id) VALUES (%s, %s, %s, %s);"
     update_room = "UPDATE rooms SET status = 'Occupied' WHERE chain_id = %s AND hotel_id = %s AND TRIM(room_num) = TRIM(%s);"
@@ -2816,7 +3007,7 @@ def db_create_renting(data):
 
             cur.execute(
                 conflict_query,
-                (resolved_chain_id, resolved_hotel_id, resolved_room_num, data["checkOutDate"], data["checkInDate"]),
+                (resolved_chain_id, resolved_hotel_id, resolved_room_num, data["check_out_date"], data["check_in_date"]),
             )
             if cur.fetchone():
                 conn.rollback()
@@ -2825,8 +3016,8 @@ def db_create_renting(data):
             cur.execute(
                 insert_res,
                 (
-                    data["checkInDate"],
-                    data["checkOutDate"],
+                    data["check_in_date"],
+                    data["check_out_date"],
                     customer_person_id,
                     resolved_chain_id,
                     resolved_hotel_id,
@@ -2839,9 +3030,8 @@ def db_create_renting(data):
                 insert_rent,
                 (
                     reservation_id,
-                    room_row["price"],
-                    data["checkOutDate"],
-                    data["checkInDate"],
+                    data["check_out_date"],
+                    data["check_in_date"],
                     room_row["price"],
                     employee_person_id,
                 ),
@@ -2920,8 +3110,8 @@ def db_create_walkin_renting(data):
         RETURNING reservation_id;
     """
     insert_rent = """
-        INSERT INTO hotel_renting (reservation_id, checked_in_time, rental_price, total_price, person_id)
-        VALUES (%s, CURRENT_TIMESTAMP, %s, ((%s::date - %s::date) * %s), %s);
+        INSERT INTO hotel_renting (reservation_id, checked_in_time, rental_price, price_paid, person_id)
+        VALUES (%s, CURRENT_TIMESTAMP, ((%s::date - %s::date) * %s), NULL, %s);
     """
     insert_has = "INSERT INTO has (chain_id, hotel_id, room_num, reservation_id) VALUES (%s, %s, %s, %s);"
     update_room = "UPDATE rooms SET status = 'Occupied' WHERE chain_id = %s AND hotel_id = %s AND TRIM(room_num) = TRIM(%s);"
@@ -2990,7 +3180,6 @@ def db_create_walkin_renting(data):
                 insert_rent,
                 (
                     reservation_id,
-                    room_row["price"],
                     data["check_out_date"],
                     data["check_in_date"],
                     room_row["price"],
@@ -3035,18 +3224,30 @@ def db_create_payment(data):
     if reservation_id is None:
         return None
 
-    query = """
+    mark_paid_query = """
+        UPDATE hotel_renting
+        SET price_paid = rental_price
+        WHERE reservation_id = %s
+          AND price_paid IS NULL
+          AND %s::numeric >= rental_price
+        RETURNING rental_price;
+    """
+    complete_reservation_query = """
         UPDATE hotel_reservation
-        SET status = CASE WHEN %s::numeric >= COALESCE((
-            SELECT hrt.total_price FROM hotel_renting hrt WHERE hrt.reservation_id = %s
-        ), 0) THEN 'Completed' ELSE status END
+        SET status = 'Completed'
         WHERE reservation_id = %s
           AND reservation_type = 'renting';
     """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(query, (data["amount"], reservation_id, reservation_id))
+            cur.execute(mark_paid_query, (reservation_id, data["amount"]))
+            paid_row = cur.fetchone()
+            if not paid_row:
+                conn.rollback()
+                return None
+
+            cur.execute(complete_reservation_query, (reservation_id,))
             if cur.rowcount == 0:
                 conn.rollback()
                 return None
@@ -3054,7 +3255,7 @@ def db_create_payment(data):
         return {
             "id": f"pay-{reservation_id}-{int(datetime.utcnow().timestamp())}",
             "rentingId": f"rent-{reservation_id}",
-            "amount": float(data["amount"]),
+            "amount": float(paid_row[0]),
             "paymentMethod": data["paymentMethod"],
             "paymentDate": datetime.utcnow().isoformat() + "Z",
             "employeeId": data["employeeId"],

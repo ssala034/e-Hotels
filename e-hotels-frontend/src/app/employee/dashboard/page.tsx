@@ -4,11 +4,14 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  getHotelBookings,
+  getHotelRentings,
   getAllBookings,
   getAllRentings,
   convertBookingToRenting,
   createWalkInRenting,
   processPayment,
+  archiveRenting,
 } from '@/lib/api';
 import { Booking, Renting, IDType } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -17,10 +20,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toaster';
-import { ClipboardCheck, UserPlus, CreditCard, Search } from 'lucide-react';
+import { ClipboardCheck, UserPlus, CreditCard, Search, Archive, Trash2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
-type TabType = 'checkin' | 'walkin' | 'payments';
+type TabType = 'checkin' | 'walkin' | 'rentings' | 'payments';
 
 export default function EmployeeDashboardPage() {
   const router = useRouter();
@@ -69,11 +72,20 @@ export default function EmployeeDashboardPage() {
   }, [user]);
 
   const loadData = async () => {
+    if (!user) return;
+
     setIsLoading(true);
     try {
+      const isEmployee = user.role === 'Employee';
+      const hotelId = user.hotelId;
+
+      if (isEmployee && !hotelId) {
+        throw new Error('Employee is not assigned to a hotel');
+      }
+
       const [bookingsData, rentingsData] = await Promise.all([
-        getAllBookings(),
-        getAllRentings(),
+        isEmployee ? getHotelBookings(hotelId as string) : getAllBookings(),
+        isEmployee ? getHotelRentings(hotelId as string) : getAllRentings(),
       ]);
       setBookings(bookingsData);
       setRentings(rentingsData);
@@ -204,22 +216,53 @@ export default function EmployeeDashboardPage() {
     }
   };
 
+  const handleArchiveRenting = async (rentingId: string) => {
+    if (!user) return;
+    if (!confirm('Archive this rental? This will remove it from current rentals.')) return;
+
+    const employeeId = user.employeeId || user.id;
+
+    try {
+      await archiveRenting(rentingId, employeeId);
+      toast({
+        title: 'Rental archived',
+        description: 'The rental has been archived successfully',
+      });
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Archive failed',
+        description: error instanceof Error ? error.message : 'Could not archive rental',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const tabs = [
     { id: 'checkin', label: 'Check-In', icon: ClipboardCheck },
     { id: 'walkin', label: 'Walk-In', icon: UserPlus },
+    { id: 'rentings', label: 'Current Rentals', icon: Archive },
     { id: 'payments', label: 'Payments', icon: CreditCard },
   ];
 
   const filteredBookings = bookings.filter(
     (booking) =>
       booking.status === 'Confirmed' &&
+      (!user?.hotelId || booking.room?.hotelId === user.hotelId) &&
       (booking.room?.hotel?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         booking.id.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  const currentHotelRentings = rentings.filter(
+    (r) => user?.role !== 'Employee' || r.room?.hotelId === user?.hotelId
+  );
+
   const unpaidRentings = rentings.filter((r) => {
-    // Check if total amount is greater than amount paid
-    return r.amountPaid < r.totalAmount;
+    // Check if total amount is greater than amount paid and belongs to employee's hotel
+    return (
+      r.amountPaid < r.totalAmount &&
+      (user?.role !== 'Employee' || r.room?.hotelId === user?.hotelId)
+    );
   });
 
   if (!user || (user.role !== 'Employee' && user.role !== 'Admin')) return null;
@@ -500,6 +543,52 @@ export default function EmployeeDashboardPage() {
             </Card>
           )}
 
+          {/* Current Rentals Tab */}
+          {activeTab === 'rentings' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Current Rentals ({currentHotelRentings.length})</CardTitle>
+                <CardDescription>All active rental entries for your hotel</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {currentHotelRentings.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-6">No current rentals found</p>
+                ) : (
+                  <div className="space-y-3">
+                    {currentHotelRentings.map((renting) => (
+                      <div key={renting.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Room #{renting.room?.roomNumber || 'N/A'}</p>
+                          <p className="text-sm text-muted-foreground">{renting.room?.hotel?.name || 'Unknown Hotel'}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatDate(renting.checkInDate)} to {formatDate(renting.checkOutDate)}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{renting.id}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="font-bold">{formatCurrency(renting.totalAmount)}</p>
+                            <Badge variant={renting.amountPaid >= renting.totalAmount ? 'success' : 'destructive'} className="mt-1">
+                              {renting.amountPaid >= renting.totalAmount ? 'Paid' : 'Unpaid'}
+                            </Badge>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleArchiveRenting(renting.id)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Payments Tab */}
           {activeTab === 'payments' && (
             <div className="space-y-4">
@@ -553,7 +642,7 @@ export default function EmployeeDashboardPage() {
                         <select
                           id="paymentMethod"
                           value={paymentForm.paymentMethod}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value as any })}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value as 'Credit Card' | 'Debit Card' | 'Cash' })}
                           required
                           className={selectClassName}
                         >

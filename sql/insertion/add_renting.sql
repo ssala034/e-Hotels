@@ -26,13 +26,13 @@ new_reservations AS (
 -- Step 2: Create Renting records with the calculation
 new_rentings AS (
     INSERT INTO hotel_renting (
-        reservation_id, checked_in_time, rental_price, total_price, person_id
+        reservation_id, checked_in_time, rental_price, price_paid, person_id
     )
     SELECT 
         nr.reservation_id, 
         '2026-03-14 12:00:00', 
-        ri.price, 
-        (ri.price * (nr.end_date - nr.start_date)), -- Now it can see the columns!
+        (ri.price * (nr.end_date - nr.start_date)), -- Full rental amount due
+        NULL, -- Starts unpaid
         nr.person_id
     FROM new_reservations nr
     JOIN room_info ri ON nr.room_num = ri.room_num

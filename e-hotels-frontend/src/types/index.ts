@@ -135,10 +135,10 @@ export interface ArchivedReservation {
   checkOutDate: string;
   archivedAt: string;
   reservationStatus: 'Completed' | 'Cancelled' | 'No Show' | 'Converted';
-  paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid' | 'Refunded';
+  paymentStatus: 'Paid' | 'Unpaid';
   source: 'Booking' | 'Walk-In';
   totalAmount: number;
-  amountPaid: number;
+  amountPaid: number | null;
   reasonArchived: string;
   notes?: string;
 }

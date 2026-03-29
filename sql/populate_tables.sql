@@ -236,6 +236,7 @@ VALUES
 ('Liam',     'Young',     'SSN', 'SSN-015', 'USA',    'Los Angeles','California',  'Sunset Blvd',                   1515, '90028',   'liam.young@hotels.com',        'A8@Lm3!xQp6D'),
 ('Emma',     'Hernandez', 'SSN', 'SSN-016', 'USA',    'Chicago',   'Illinois',     'Michigan Ave',                  1616, '60601',   'emma.hernandez@hotels.com',    'T1!xZ9@Lp4Qv'),
 ('Oliver',   'King',      'SSN', 'SSN-017', 'Canada', 'Toronto',   'Ontario',      'Queen St W',                    1717, 'M5H2N2',  'oliver.king@hotels.com',       'M6@pX2!qZ8Lt'),
+('John',     'Jones',     'SSN', 'SSN-018', 'Canada', 'Oshawa',    'Ontario',      'Maple St E',                    1241, 'M9U3R5',  'john.jones@hotels.com',        'oi*(kNMhaj!'),
 ('Lucas',    'Scott',     'SSN', 'SSN-019', 'Canada', 'Toronto',   'Ontario',      'Bloor St',                      1919, 'M4W1A8',  'lucas.scott@hotels.com',       'V9@xT2!Lm5Qp'),
 ('Harper',   'Torres',    'SSN', 'SSN-020', 'Canada', 'Toronto',   'Ontario',      'Yonge St',                      2020, 'M5B2H1',  'harper.torres@hotels.com',     'Z4!pLm8@Xq2D'),
 ('Mason',    'Nguyen',    'SSN', 'SSN-021', 'Canada', 'Toronto',   'Ontario',      'Dundas St',                     2121, 'M5G1C3',  'mason.nguyen@hotels.com',      'C7@T3!Zx9Lp'),
@@ -278,13 +279,6 @@ FROM employee e
 WHERE hotels.chain_id = e.chain_id AND hotels.hotel_id = e.hotel_id AND e.role = 'Manager';
 
 
--- Set one employee to be manager of 2 hotels
-UPDATE hotels
-SET manager_id = 1
-FROM employee e
-WHERE hotels.chain_id = 3 AND hotels.hotel_name = 'The Ritz Toronto';
-
-
 
 -- select hotels.chain_id, hotels.hotel_id, hotels.hotel_name,  from hotels join rooms using (chain_id, hotel_id);
 -- select * from hotel_chains;
@@ -294,6 +288,12 @@ WHERE hotels.chain_id = 3 AND hotels.hotel_name = 'The Ritz Toronto';
 
 
 -- OLD POPULATION:
+
+-- Set one employee to be manager of 2 hotels
+-- UPDATE hotels
+-- SET manager_id = 1
+-- FROM employee e
+-- WHERE hotels.chain_id = 3 AND hotels.hotel_name = 'The Ritz Toronto';
 
 -- INSERT INTO room_amenities (chain_id, hotel_id, room_num, amenity)
 -- SELECT 

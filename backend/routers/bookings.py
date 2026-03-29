@@ -59,7 +59,10 @@ def cancel_booking(booking_id: str):
 
 @router.post("/{booking_id}/convert")
 def convert_booking_to_renting(booking_id: str, body: ConvertBookingRequest):
-    renting = db_convert_booking_to_renting(booking_id, body.employeeId)
+    try:
+        renting = db_convert_booking_to_renting(booking_id, body.employeeId)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     if not renting:
         raise HTTPException(status_code=404, detail="Booking not found")
     return renting

@@ -220,9 +220,9 @@ CREATE TABLE IF NOT EXISTS has (
 
 	PRIMARY KEY (chain_id, hotel_id, room_num, reservation_id),
 	FOREIGN KEY (chain_id, hotel_id, room_num) REFERENCES rooms (chain_id, hotel_id, room_num)
-        ON DELETE RESTRICT ON UPDATE CASCADE,
+        ON DELETE CASCADE ON UPDATE CASCADE,
 	FOREIGN KEY (reservation_id) REFERENCES hotel_reservation (reservation_id)
-		ON DELETE RESTRICT ON UPDATE CASCADE
+		ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- ========================
@@ -247,7 +247,7 @@ CREATE TABLE IF NOT EXISTS hotel_renting (
     checked_in_time     TIMESTAMP NOT NULL,
     checked_out_time    TIMESTAMP,
     rental_price        NUMERIC(8,2) NOT NULL,
-    total_price         NUMERIC(8,2),
+    price_paid          NUMERIC(8,2),
     person_id           INTEGER,    -- employee who processed check-in
     PRIMARY KEY (reservation_id),
     FOREIGN KEY (reservation_id) REFERENCES hotel_reservation (reservation_id)
@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS hotel_renting (
     FOREIGN KEY (person_id) REFERENCES employee (person_id)
         ON DELETE SET NULL ON UPDATE CASCADE,
     CHECK (rental_price > 0),
-    CHECK (total_price IS NULL OR total_price >= rental_price),
+    CHECK (price_paid IS NULL OR price_paid = rental_price),
     CHECK (checked_out_time IS NULL OR checked_out_time > checked_in_time)
 );
 
