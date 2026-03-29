@@ -363,14 +363,6 @@ def _map_room_row(row):
         "problems": (issues[0] if issues else None),
     }
 
-
-# ============================================================================
-# BLANK QUERY STUBS
-# Replace 'pass' with actual SQL queries when ready to use the database.
-# Each function shows the intended query as a comment.
-# ============================================================================
-
-
 # --- Hotel Chains ---
 
 def db_get_all_chains():
@@ -1194,13 +1186,13 @@ def db_get_room_by_id(room_id):
                   AND re.hotel_id = r.hotel_id
                   AND re.room_num = r.room_num
             ) AS is_extendable,
-                        (
-                                SELECT ARRAY_AGG(re.extendible ORDER BY re.extendible)
-                                FROM room_extendible re
-                                WHERE re.chain_id = r.chain_id
-                                    AND re.hotel_id = r.hotel_id
-                                    AND re.room_num = r.room_num
-                        ) AS extendable_with,
+                (
+                    SELECT ARRAY_AGG(re.extendible ORDER BY re.extendible)
+                    FROM room_extendible re
+                    WHERE re.chain_id = r.chain_id
+                        AND re.hotel_id = r.hotel_id
+                        AND re.room_num = r.room_num
+            ) AS extendable_with,
             (
                 SELECT ARRAY_AGG(ri.issue ORDER BY ri.issue)
                 FROM room_issues ri
