@@ -67,6 +67,7 @@ export interface Employee {
   ssnSin: string;
   role: EmployeeRole;
   hotelId: string;
+  chainId?: string;
   hotel?: Hotel;
 }
 
@@ -120,6 +121,27 @@ export interface Payment {
 }
 
 export type PaymentMethod = 'Cash' | 'Credit Card' | 'Debit Card' | 'Bank Transfer';
+
+export interface ArchivedReservation {
+  id: string;
+  chainId: string;
+  hotelName: string;
+  hotelId?: string;
+  customerName: string;
+  customerEmail: string;
+  roomNumber: string;
+  roomType: string;
+  checkInDate: string;
+  checkOutDate: string;
+  archivedAt: string;
+  reservationStatus: 'Completed' | 'Cancelled' | 'No Show' | 'Converted';
+  paymentStatus: 'Paid' | 'Unpaid';
+  source: 'Booking' | 'Walk-In';
+  totalAmount: number;
+  amountPaid: number | null;
+  reasonArchived: string;
+  notes?: string;
+}
 
 export interface Address {
   street: string;
@@ -225,6 +247,29 @@ export interface RentingData {
   bookingId?: string;
 }
 
+export interface WalkInCustomerData {
+  firstName: string;
+  lastName: string;
+  idType: IDType;
+  idNumber: string;
+  country: string;
+  city: string;
+  stateProvince: string;
+  streetName: string;
+  streetNumber: string;
+  zipCode: string;
+  email: string;
+  password: string;
+}
+
+export interface WalkInRentingData {
+  roomId: string;
+  checkInDate: string;
+  checkOutDate: string;
+  employeeId: string;
+  customer: WalkInCustomerData;
+}
+
 export interface PaymentData {
   rentingId: string;
   amount: number;
@@ -273,6 +318,7 @@ export interface EmployeeData {
   role: EmployeeRole;
   hotelId?: string;
   chainId?: string;
+  hotelName?: string;
 }
 
 export interface CustomerData {

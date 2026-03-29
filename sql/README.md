@@ -20,4 +20,11 @@ Mod.
 * Do we need to add a hotel chain
 watch out for the aggregate stuff like counts
 ** Should defintely have a trigger or query to prevent double booking
-Need payment functionality just don't store in archive
+Need payment functionality, need to have a good flow and when a customer will pay for it, just don't store in archive
+review that searching mock
+review booking -> renting -> archive queries
+review payment queries
+might need a condition that chain region = all its hotel regions
+Might need to update how the triggers are used in the backend code
+fix payments in general and on employee dashbaord
+add a better search on bookings, like the dates

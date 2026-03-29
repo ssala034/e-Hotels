@@ -38,7 +38,7 @@ booking_insert AS (
     SELECT 
         reservation_id, 
         CURRENT_TIMESTAMP,
-        (end_date - start_date) * daily_price
+        (end_date - start_date) * daily_price * 1.23
     FROM new_reservation
     RETURNING reservation_id
 )

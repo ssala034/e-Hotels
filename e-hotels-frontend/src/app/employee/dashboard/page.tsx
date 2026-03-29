@@ -4,24 +4,26 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  getHotelBookings,
+  getHotelRentings,
   getAllBookings,
   getAllRentings,
   convertBookingToRenting,
-  createBooking,
+  createWalkInRenting,
   processPayment,
-  getAllCustomers,
+  archiveRenting,
 } from '@/lib/api';
-import { Booking, Renting, Customer } from '@/types';
+import { Booking, Renting, IDType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toaster';
-import { ClipboardCheck, UserPlus, CreditCard, Search } from 'lucide-react';
+import { ClipboardCheck, UserPlus, CreditCard, Search, Archive, Trash2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
-type TabType = 'checkin' | 'walkin' | 'payments';
+type TabType = 'checkin' | 'walkin' | 'rentings' | 'payments';
 
 export default function EmployeeDashboardPage() {
   const router = useRouter();
@@ -32,13 +34,23 @@ export default function EmployeeDashboardPage() {
   const [activeTab, setActiveTab] = useState<TabType>('checkin');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [rentings, setRentings] = useState<Renting[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Walk-in form
   const [walkInForm, setWalkInForm] = useState({
-    customerId: '',
+    firstName: '',
+    lastName: '',
+    idType: 'SSN' as IDType,
+    idNumber: '',
+    country: 'Canada',
+    city: '',
+    stateProvince: '',
+    streetName: '',
+    streetNumber: '',
+    zipCode: '',
+    email: '',
+    password: '',
     roomId: '',
     checkInDate: new Date().toISOString().split('T')[0],
     checkOutDate: '',
@@ -60,16 +72,23 @@ export default function EmployeeDashboardPage() {
   }, [user]);
 
   const loadData = async () => {
+    if (!user) return;
+
     setIsLoading(true);
     try {
-      const [bookingsData, rentingsData, customersData] = await Promise.all([
-        getAllBookings(),
-        getAllRentings(),
-        getAllCustomers(),
+      const isEmployee = user.role === 'Employee';
+      const hotelId = user.hotelId;
+
+      if (isEmployee && !hotelId) {
+        throw new Error('Employee is not assigned to a hotel');
+      }
+
+      const [bookingsData, rentingsData] = await Promise.all([
+        isEmployee ? getHotelBookings(hotelId as string) : getAllBookings(),
+        isEmployee ? getHotelRentings(hotelId as string) : getAllRentings(),
       ]);
       setBookings(bookingsData);
       setRentings(rentingsData);
-      setCustomers(customersData);
     } catch (error) {
       toast({
         title: 'Error loading data',
@@ -85,8 +104,10 @@ export default function EmployeeDashboardPage() {
     if (!confirm('Confirm check-in for this booking?')) return;
     if (!user) return;
 
+    const employeeId = user.employeeId || user.id;
+
     try {
-      await convertBookingToRenting(bookingId, user.id);
+      await convertBookingToRenting(bookingId, employeeId);
       toast({
         title: 'Check-in successful',
         description: 'The booking has been converted to a rental',
@@ -105,16 +126,29 @@ export default function EmployeeDashboardPage() {
     e.preventDefault();
     if (!user) return;
 
+    const employeeId = user.employeeId || user.id;
+
     try {
-      const booking = await createBooking({
+      await createWalkInRenting({
+        employeeId,
         roomId: walkInForm.roomId,
-        customerId: walkInForm.customerId,
         checkInDate: walkInForm.checkInDate,
         checkOutDate: walkInForm.checkOutDate,
+        customer: {
+          firstName: walkInForm.firstName,
+          lastName: walkInForm.lastName,
+          idType: walkInForm.idType,
+          idNumber: walkInForm.idNumber,
+          country: walkInForm.country,
+          city: walkInForm.city,
+          stateProvince: walkInForm.stateProvince,
+          streetName: walkInForm.streetName,
+          streetNumber: walkInForm.streetNumber,
+          zipCode: walkInForm.zipCode,
+          email: walkInForm.email,
+          password: walkInForm.password,
+        },
       });
-
-      // Immediately convert to renting for walk-in
-      await convertBookingToRenting(booking.id, user.id);
 
       toast({
         title: 'Walk-in registered',
@@ -122,7 +156,18 @@ export default function EmployeeDashboardPage() {
       });
 
       setWalkInForm({
-        customerId: '',
+        firstName: '',
+        lastName: '',
+        idType: 'SSN',
+        idNumber: '',
+        country: 'Canada',
+        city: '',
+        stateProvince: '',
+        streetName: '',
+        streetNumber: '',
+        zipCode: '',
+        email: '',
+        password: '',
         roomId: '',
         checkInDate: new Date().toISOString().split('T')[0],
         checkOutDate: '',
@@ -171,22 +216,53 @@ export default function EmployeeDashboardPage() {
     }
   };
 
+  const handleArchiveRenting = async (rentingId: string) => {
+    if (!user) return;
+    if (!confirm('Archive this rental? This will remove it from current rentals.')) return;
+
+    const employeeId = user.employeeId || user.id;
+
+    try {
+      await archiveRenting(rentingId, employeeId);
+      toast({
+        title: 'Rental archived',
+        description: 'The rental has been archived successfully',
+      });
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Archive failed',
+        description: error instanceof Error ? error.message : 'Could not archive rental',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const tabs = [
     { id: 'checkin', label: 'Check-In', icon: ClipboardCheck },
     { id: 'walkin', label: 'Walk-In', icon: UserPlus },
+    { id: 'rentings', label: 'Current Rentals', icon: Archive },
     { id: 'payments', label: 'Payments', icon: CreditCard },
   ];
 
   const filteredBookings = bookings.filter(
     (booking) =>
       booking.status === 'Confirmed' &&
+      (!user?.hotelId || booking.room?.hotelId === user.hotelId) &&
       (booking.room?.hotel?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         booking.id.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  const currentHotelRentings = rentings.filter(
+    (r) => user?.role !== 'Employee' || r.room?.hotelId === user?.hotelId
+  );
+
   const unpaidRentings = rentings.filter((r) => {
-    // Check if total amount is greater than amount paid
-    return r.amountPaid < r.totalAmount;
+    // Check if total amount is greater than amount paid and belongs to employee's hotel
+    return (
+      r.amountPaid < r.totalAmount &&
+      (user?.role !== 'Employee' || r.room?.hotelId === user?.hotelId)
+    );
   });
 
   if (!user || (user.role !== 'Employee' && user.role !== 'Admin')) return null;
@@ -300,26 +376,128 @@ export default function EmployeeDashboardPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Register Walk-In Customer</CardTitle>
-                <CardDescription>Create a new booking and check in immediately</CardDescription>
+                <CardDescription>Create a new customer and check in immediately</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleWalkIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="customerId">Customer</Label>
-                    <select
-                      id="customerId"
-                      value={walkInForm.customerId}
-                      onChange={(e) => setWalkInForm({ ...walkInForm, customerId: e.target.value })}
-                      required
-                      className={selectClassName}
-                    >
-                      <option value="">Select a customer</option>
-                      {customers.map((customer) => (
-                        <option key={customer.id} value={customer.id}>
-                          {customer.firstName} {customer.lastName} - {customer.email}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName">First Name</Label>
+                      <Input
+                        id="firstName"
+                        value={walkInForm.firstName}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, firstName: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Last Name</Label>
+                      <Input
+                        id="lastName"
+                        value={walkInForm.lastName}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, lastName: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="idType">ID Type</Label>
+                      <select
+                        id="idType"
+                        value={walkInForm.idType}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, idType: e.target.value as IDType })}
+                        required
+                        className={selectClassName}
+                      >
+                        <option value="SSN">SSN</option>
+                        <option value="SIN">SIN</option>
+                        <option value="Driver License">Driver License</option>
+                        <option value="Passport">Passport</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="idNumber">ID Number</Label>
+                      <Input
+                        id="idNumber"
+                        value={walkInForm.idNumber}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, idNumber: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={walkInForm.email}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, email: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        minLength={8}
+                        value={walkInForm.password}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, password: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="country">Country</Label>
+                      <Input
+                        id="country"
+                        value={walkInForm.country}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, country: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="city">City</Label>
+                      <Input
+                        id="city"
+                        value={walkInForm.city}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, city: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="stateProvince">State/Province</Label>
+                      <Input
+                        id="stateProvince"
+                        value={walkInForm.stateProvince}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, stateProvince: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="streetName">Street Name</Label>
+                      <Input
+                        id="streetName"
+                        value={walkInForm.streetName}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, streetName: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="streetNumber">Street Number</Label>
+                      <Input
+                        id="streetNumber"
+                        value={walkInForm.streetNumber}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, streetNumber: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="zipCode">ZIP/Postal Code</Label>
+                      <Input
+                        id="zipCode"
+                        value={walkInForm.zipCode}
+                        onChange={(e) => setWalkInForm({ ...walkInForm, zipCode: e.target.value })}
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -361,6 +539,52 @@ export default function EmployeeDashboardPage() {
                     Register Walk-In
                   </Button>
                 </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Current Rentals Tab */}
+          {activeTab === 'rentings' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Current Rentals ({currentHotelRentings.length})</CardTitle>
+                <CardDescription>All active rental entries for your hotel</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {currentHotelRentings.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-6">No current rentals found</p>
+                ) : (
+                  <div className="space-y-3">
+                    {currentHotelRentings.map((renting) => (
+                      <div key={renting.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Room #{renting.room?.roomNumber || 'N/A'}</p>
+                          <p className="text-sm text-muted-foreground">{renting.room?.hotel?.name || 'Unknown Hotel'}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatDate(renting.checkInDate)} to {formatDate(renting.checkOutDate)}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{renting.id}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="font-bold">{formatCurrency(renting.totalAmount)}</p>
+                            <Badge variant={renting.amountPaid >= renting.totalAmount ? 'success' : 'destructive'} className="mt-1">
+                              {renting.amountPaid >= renting.totalAmount ? 'Paid' : 'Unpaid'}
+                            </Badge>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleArchiveRenting(renting.id)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -418,7 +642,7 @@ export default function EmployeeDashboardPage() {
                         <select
                           id="paymentMethod"
                           value={paymentForm.paymentMethod}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value as any })}
+                          onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value as 'Credit Card' | 'Debit Card' | 'Cash' })}
                           required
                           className={selectClassName}
                         >

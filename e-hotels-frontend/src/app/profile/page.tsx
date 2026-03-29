@@ -8,7 +8,8 @@ import {
   getCustomerRentings, 
   getAllCustomers,
   updateCustomer,
-  cancelBooking 
+  cancelBooking,
+  deleteCustomer,
 } from '@/lib/api';
 import { Booking, Renting, Customer } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -17,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toaster';
-import { User, Calendar, CreditCard, Settings, MapPin } from 'lucide-react';
+import { User, Calendar, Settings, MapPin, AlertTriangle } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 type TabType = 'bookings' | 'rentings' | 'profile' | 'settings';
@@ -33,12 +34,18 @@ export default function ProfilePage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedRentingForPayment, setSelectedRentingForPayment] = useState<Renting | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'Credit Card' | 'Debit Card' | 'Cash'>('Credit Card');
+  const [localPaidByRentingId, setLocalPaidByRentingId] = useState<Record<string, number>>({});
   
   const [profileForm, setProfileForm] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
     email: user?.email || '',
-    phone: user?.phone || '',
     street: user?.address?.street || '',
     city: user?.address?.city || '',
     stateProvince: user?.address?.stateProvince || '',
@@ -108,7 +115,7 @@ export default function ProfilePage() {
         firstName: profileForm.firstName,
         lastName: profileForm.lastName,
         email: profileForm.email,
-        phone: profileForm.phone,
+        phone: existingCustomer?.phone || user.phone || '',
         address: {
           street: profileForm.street,
           city: profileForm.city,
@@ -145,6 +152,99 @@ export default function ProfilePage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+
+    setIsDeletingAccount(true);
+    try {
+      await deleteCustomer(user.id);
+
+      // Ensure local session is cleared even if backend token is now invalid after account deletion.
+      setUser(null);
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+
+      toast({
+        title: 'Account deleted',
+        description: 'Your account has been permanently deleted.',
+      });
+
+      router.push('/');
+    } catch (error) {
+      toast({
+        title: 'Delete failed',
+        description: error instanceof Error ? error.message : 'Could not delete your account',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeletingAccount(false);
+      setIsDeleteConfirmOpen(false);
+    }
+  };
+
+  const getEffectiveAmountPaid = (renting: Renting) => {
+    const locallyUpdatedAmount = localPaidByRentingId[renting.id];
+    const paid = locallyUpdatedAmount ?? renting.amountPaid;
+    return Math.min(renting.totalAmount, Math.max(0, paid));
+  };
+
+  const getRemainingAmount = (renting: Renting) => {
+    return Math.max(0, renting.totalAmount - getEffectiveAmountPaid(renting));
+  };
+
+  const openPaymentModal = (renting: Renting) => {
+    const remaining = getRemainingAmount(renting);
+    setSelectedRentingForPayment(renting);
+    setPaymentMethod('Credit Card');
+    setPaymentAmount(remaining > 0 ? remaining.toFixed(2) : '');
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleMockPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRentingForPayment) return;
+
+    const amount = Number(paymentAmount);
+    const remaining = getRemainingAmount(selectedRentingForPayment);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({
+        title: 'Invalid amount',
+        description: 'Please enter an amount greater than 0.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (amount > remaining) {
+      toast({
+        title: 'Amount too high',
+        description: `Payment cannot exceed remaining balance of ${formatCurrency(remaining)}.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const nextPaid = Math.min(
+      selectedRentingForPayment.totalAmount,
+      getEffectiveAmountPaid(selectedRentingForPayment) + amount,
+    );
+
+    setLocalPaidByRentingId((prev) => ({
+      ...prev,
+      [selectedRentingForPayment.id]: nextPaid,
+    }));
+
+    toast({
+      title: 'Payment recorded',
+      description: `${formatCurrency(amount)} paid via ${paymentMethod}.`,
+    });
+
+    setIsPaymentModalOpen(false);
+    setSelectedRentingForPayment(null);
+    setPaymentAmount('');
   };
 
   const tabs = [
@@ -273,8 +373,10 @@ export default function ProfilePage() {
                           <CardTitle>Room #{renting.room?.roomNumber || 'N/A'}</CardTitle>
                           <CardDescription>{renting.room?.hotel?.name || 'Hotel'}</CardDescription>
                         </div>
-                        <Badge variant={renting.amountPaid >= renting.totalAmount ? 'default' : 'destructive'}>
-                          {renting.amountPaid >= renting.totalAmount ? 'Paid' : `Unpaid: ${formatCurrency(renting.totalAmount - renting.amountPaid)}`}
+                        <Badge variant={getEffectiveAmountPaid(renting) >= renting.totalAmount ? 'default' : 'destructive'}>
+                          {getEffectiveAmountPaid(renting) >= renting.totalAmount
+                            ? 'Paid'
+                            : `Unpaid: ${formatCurrency(getRemainingAmount(renting))}`}
                         </Badge>
                       </div>
                     </CardHeader>
@@ -293,10 +395,19 @@ export default function ProfilePage() {
                           <p className="font-medium">{formatCurrency(renting.totalAmount)}</p>
                         </div>
                         <div>
+                          <p className="text-sm text-muted-foreground">Amount Paid</p>
+                          <p className="font-medium">{formatCurrency(getEffectiveAmountPaid(renting))}</p>
+                        </div>
+                        <div>
                           <p className="text-sm text-muted-foreground">Renting ID</p>
                           <p className="font-medium">{renting.id}</p>
                         </div>
                       </div>
+                      {getRemainingAmount(renting) > 0 && (
+                        <Button onClick={() => openPaymentModal(renting)}>
+                          Pay Balance
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 ))
@@ -343,14 +454,6 @@ export default function ProfilePage() {
                         value={profileForm.email}
                         onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
                         required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone</Label>
-                      <Input
-                        id="phone"
-                        value={profileForm.phone}
-                        onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
                       />
                     </div>
                   </div>
@@ -457,10 +560,109 @@ export default function ProfilePage() {
                   <CardTitle className="text-destructive">Danger Zone</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Button variant="destructive" disabled>Delete Account</Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setIsDeleteConfirmOpen(true)}
+                    disabled={isDeletingAccount}
+                  >
+                    Delete Account
+                  </Button>
                   <p className="text-sm text-muted-foreground mt-2">
                     This action is permanent and cannot be undone
                   </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {isDeleteConfirmOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+              <Card className="w-full max-w-lg border-destructive/40 shadow-2xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-5 w-5" />
+                    Confirm Account Deletion
+                  </CardTitle>
+                  <CardDescription className="text-sm leading-relaxed text-foreground/90">
+                    Careful: deleting your account will remove your profile and all related customer information permanently.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsDeleteConfirmOpen(false)}
+                      disabled={isDeletingAccount}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleDeleteAccount}
+                      disabled={isDeletingAccount}
+                    >
+                      {isDeletingAccount ? 'Deleting...' : 'Yes, Delete My Account'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {isPaymentModalOpen && selectedRentingForPayment && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+              <Card className="w-full max-w-lg shadow-2xl">
+                <CardHeader>
+                  <CardTitle>Pay For Current Stay</CardTitle>
+                  <CardDescription>
+                    Renting {selectedRentingForPayment.id} - remaining balance {formatCurrency(getRemainingAmount(selectedRentingForPayment))}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleMockPayment} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentAmount">Amount</Label>
+                      <Input
+                        id="paymentAmount"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max={getRemainingAmount(selectedRentingForPayment).toFixed(2)}
+                        value={paymentAmount}
+                        onChange={(e) => setPaymentAmount(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentMethod">Payment Method</Label>
+                      <select
+                        id="paymentMethod"
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value as 'Credit Card' | 'Debit Card' | 'Cash')}
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      >
+                        <option value="Credit Card">Credit Card</option>
+                        <option value="Debit Card">Debit Card</option>
+                        <option value="Cash">Cash</option>
+                      </select>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setIsPaymentModalOpen(false);
+                          setSelectedRentingForPayment(null);
+                          setPaymentAmount('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit">Pay Now</Button>
+                    </div>
+                  </form>
                 </CardContent>
               </Card>
             </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { searchRooms, getAllChains, getAllHotels, getAllRooms } from '@/lib/api';
+import { searchRooms, getAllChains, getAllHotels, getAllRooms, getChainAveragePrices } from '@/lib/api';
 import { Room, HotelChain, Hotel, RoomCapacity, ViewType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/toaster';
+import { RoomsPerAreaView } from '@/components/analytics/RoomsPerAreaView';
 import {
   Home, ChevronRight, MapPin, Users, Star, Eye,
   Building2, Hotel as HotelIcon, DoorOpen, Info, Search, SlidersHorizontal,
@@ -30,6 +31,7 @@ export default function SearchPage() {
   const [allHotels, setAllHotels] = useState<Hotel[]>([]);
   const [allCities, setAllCities] = useState<string[]>([]);
   const [allAmenities, setAllAmenities] = useState<string[]>([]);
+  const [hotelAveragePrices, setHotelAveragePrices] = useState<Record<number, number>>({});
 
   // ── Hierarchy state ──
   const [selectedChain, setSelectedChain] = useState<HotelChain | null>(null);
@@ -175,9 +177,40 @@ export default function SearchPage() {
     setHotelCityFilter([]);
     setHotelCategoryFilter([]);
     setHotelMinRooms(0);
+    
+    // Fetch average prices for this chain
+    const fetchAveragePrices = async () => {
+      try {
+        const result = await getChainAveragePrices(chain.id);
+        const priceMap: Record<number, number> = {};
+        result.hotels.forEach((hotel) => {
+          priceMap[hotel.hotel_id] = hotel.average_room_price;
+        });
+        setHotelAveragePrices(priceMap);
+      } catch (error) {
+        // Silently fail - prices are optional
+      }
+    };
+    fetchAveragePrices();
   };
   const goToRooms = (hotel: Hotel) => {
     setSelectedHotel(hotel);
+  };
+
+  const handleAreaSelect = (area: string) => {
+    const citiesInArea = Array.from(
+      new Set(
+        allHotels
+          .filter((hotel) => hotel.address?.stateProvince === area)
+          .map((hotel) => hotel.address.city)
+      )
+    );
+
+    setSelectedChain(null);
+    setSelectedHotel(null);
+    setRooms([]);
+    setChainLocationFilter(citiesInArea);
+    setChainMinHotels(0);
   };
 
   // ── Toggle helpers ──
@@ -241,6 +274,16 @@ export default function SearchPage() {
           )}
         </div>
       </nav>
+
+      {/* ════════════════════════════════════════════════════════════════════
+          AVAILABILITY OVERVIEW
+      ════════════════════════════════════════════════════════════════════ */}
+      {level === 'chains' && (
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold mb-4">Availability Overview by Region</h2>
+          <RoomsPerAreaView onAreaSelect={handleAreaSelect} />
+        </div>
+      )}
 
       {/* ════════════════════════════════════════════════════════════════════
           LEVEL 1 — HOTEL CHAINS
@@ -462,6 +505,11 @@ export default function SearchPage() {
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
                               {hotel.numberOfRooms} rooms
+                              {hotelAveragePrices[parseInt(hotel.id.split('-')[1])] !== undefined && (
+                                <span className="ml-2">
+                                  - Avg price: {formatCurrency(hotelAveragePrices[parseInt(hotel.id.split('-')[1])])}
+                                </span>
+                              )}
                             </p>
                           </div>
                           <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0 mt-1" />

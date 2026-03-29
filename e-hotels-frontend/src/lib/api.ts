@@ -2,8 +2,9 @@ import {
   User, AuthResponse, RegisterData, SearchCriteria, Room, Booking,
   BookingData, Renting, RentingData, Payment, PaymentData, HotelChain, ChainData,
   Hotel, HotelData, RoomData, Employee, EmployeeData, Customer, CustomerData,
+  WalkInRentingData,
   HotelFilters, RoomFilters, EmployeeFilters, CustomerFilters, AreaAvailability,
-  HotelCapacity
+  HotelCapacity, ArchivedReservation
 } from '@/types';
 
 // ============================================================================
@@ -84,6 +85,10 @@ export async function checkRoomAvailability(
   return result.available;
 }
 
+export async function getChainAveragePrices(chainId: string): Promise<{ chainId: string; hotels: Array<{ hotel_id: number; average_room_price: number }> }> {
+  return fetchApi<{ chainId: string; hotels: Array<{ hotel_id: number; average_room_price: number }> }>(`/api/search/chains/${encodeURIComponent(chainId)}/average-price`);
+}
+
 // ============================================================================
 // BOOKING API
 // ============================================================================
@@ -136,6 +141,32 @@ export async function createDirectRenting(rentingData: RentingData): Promise<Ren
   });
 }
 
+export async function createWalkInRenting(data: WalkInRentingData): Promise<Renting> {
+  return fetchApi<Renting>('/api/rentings/walk-in', {
+    method: 'POST',
+    body: JSON.stringify({
+      room_id: data.roomId,
+      check_in_date: data.checkInDate,
+      check_out_date: data.checkOutDate,
+      employee_id: data.employeeId,
+      customer: {
+        first_name: data.customer.firstName,
+        last_name: data.customer.lastName,
+        ssn_type: data.customer.idType,
+        ssn_number: data.customer.idNumber,
+        country: data.customer.country,
+        city: data.customer.city,
+        region: data.customer.stateProvince,
+        street_name: data.customer.streetName,
+        street_number: data.customer.streetNumber,
+        postalcode: data.customer.zipCode,
+        email: data.customer.email,
+        password: data.customer.password,
+      },
+    }),
+  });
+}
+
 export async function getAllRentings(): Promise<Renting[]> {
   return fetchApi<Renting[]>('/api/rentings');
 }
@@ -150,6 +181,11 @@ export async function getHotelRentings(hotelId: string): Promise<Renting[]> {
 
 export async function getRentingById(rentingId: string): Promise<Renting | null> {
   return fetchApi<Renting>(`/api/rentings/${encodeURIComponent(rentingId)}`);
+}
+
+export async function archiveRenting(rentingId: string, employeeId: string): Promise<void> {
+  const qs = toQueryString({ employeeId });
+  await fetchApi(`/api/rentings/${encodeURIComponent(rentingId)}${qs}`, { method: 'DELETE' });
 }
 
 // ============================================================================
@@ -349,4 +385,12 @@ export async function getAvailableRoomsPerArea(): Promise<AreaAvailability[]> {
 
 export async function getHotelCapacityView(): Promise<HotelCapacity[]> {
   return fetchApi<HotelCapacity[]>('/api/analytics/hotel-capacity');
+}
+
+export async function getArchivedReservations(filters?: { chainId?: string; hotelId?: string }): Promise<ArchivedReservation[]> {
+  const qs = toQueryString({
+    chainId: filters?.chainId,
+    hotelId: filters?.hotelId,
+  });
+  return fetchApi(`/api/archived-reservations${qs}`);
 }

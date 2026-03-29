@@ -20,14 +20,14 @@ insert_rental AS (
         reservation_id,
         checked_in_time,
         rental_price,
-        total_price,
+        price_paid,
         person_id
     )
     SELECT
         reservation_id,
         CURRENT_TIMESTAMP, -- The exact moment of check-in
-        daily_price,
-        (daily_price * (end_date - start_date)), -- Calculated total
+        (daily_price * (end_date - start_date)), -- Full rental amount due
+        NULL, -- Starts unpaid
         10 -- a random employee ID for processing the check-in
     FROM reservation_lookup
     RETURNING reservation_id

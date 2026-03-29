@@ -23,8 +23,6 @@ export function Navbar() {
   const navLinks = [
     { href: '/', label: 'Home' },
     { href: '/search', label: 'Search Rooms' },
-    { href: '/about', label: 'About' },
-    { href: '/contact', label: 'Contact' },
   ];
 
   const roleLinks = {

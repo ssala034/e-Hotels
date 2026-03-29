@@ -39,8 +39,8 @@ BEGIN
         CURRENT_TIMESTAMP,
         hr.created_at,
         CASE
-            WHEN hr.reservation_type = 'renting' THEN COALESCE(hrt.total_price, hrt.rental_price)
-            ELSE hb.future_price
+            WHEN hr.reservation_type = 'renting' THEN hrt.price_paid
+            ELSE NULL
         END,
         h.hotel_name,
         hc.chain_name,

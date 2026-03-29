@@ -9,13 +9,15 @@ WHERE hotel_id = 1 AND room_num = '102'
       WHERE hotel_id = 1 AND room_num = '102' AND extendible = 'Yes'
   );
 
--- 2. Recalculate the Total Price for the modified stay
+-- 2. Recalculate the rental amount and reset payment state
 UPDATE hotel_renting
-SET total_price = rental_price * (
-    SELECT (end_date - start_date) 
-    FROM hotel_reservation 
-    WHERE hotel_id = 1 AND room_num = '102'
-)
+SET rental_price = (
+        SELECT rm.price * (hr.end_date - hr.start_date)
+        FROM hotel_reservation hr
+        JOIN rooms rm ON rm.hotel_id = hr.hotel_id AND TRIM(rm.room_num) = TRIM(hr.room_num)
+        WHERE hr.hotel_id = 1 AND hr.room_num = '102'
+    ),
+    price_paid = NULL
 WHERE reservation_id = (
     SELECT reservation_id FROM hotel_reservation 
     WHERE hotel_id = 1 AND room_num = '102'
