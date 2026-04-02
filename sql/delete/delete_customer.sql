@@ -1,19 +1,10 @@
 SET search_path TO "HotelProject";
 
-CREATE OR REPLACE PROCEDURE sp_delete_customer(
-    p_person_id INTEGER
-)
+CREATE OR REPLACE FUNCTION trg_delete_customer()
+RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM customer
-        WHERE person_id = p_person_id
-    ) THEN
-            RETURN;
-    END IF;
-
     INSERT INTO archived_reservation (
         archive_date,
         creation_date,
@@ -71,41 +62,37 @@ BEGIN
         ON hb.reservation_id = hr.reservation_id
     LEFT JOIN hotel_renting hrt
         ON hrt.reservation_id = hr.reservation_id
-    WHERE hr.person_id = p_person_id;
+    WHERE hr.person_id = OLD.person_id;
 
     DELETE FROM has hs
     USING hotel_reservation hr
     WHERE hs.reservation_id = hr.reservation_id
-      AND hr.person_id = p_person_id;
+      AND hr.person_id = OLD.person_id;
 
     DELETE FROM hotel_reservation hr
-    WHERE hr.person_id = p_person_id;
+    WHERE hr.person_id = OLD.person_id;
 
     IF EXISTS (
         SELECT 1
         FROM employee
-        WHERE person_id = p_person_id
+        WHERE person_id = OLD.person_id
     ) THEN
-        DELETE FROM customer
-        WHERE person_id = p_person_id;
+        RETURN OLD;
     ELSE
         DELETE FROM person
-        WHERE person_id = p_person_id;
+        WHERE person_id = OLD.person_id;
     END IF;
+
+    RETURN OLD;
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_delete_customer ON customer;
+
+CREATE TRIGGER trg_delete_customer
+    BEFORE DELETE ON customer
+    FOR EACH ROW
+    EXECUTE FUNCTION trg_delete_customer();
+
 -- Example
--- CALL sp_delete_customer(5);
-
-
--- removed active reservation check clause
-
--- IF EXISTS (
---         SELECT 1
---         FROM hotel_reservation hr
---         WHERE hr.person_id = p_person_id
---           AND hr.status IN ('Pending', 'Confirmed', 'CheckedIn')
---     ) THEN
---             RETURN;
---     END IF;
+-- DELETE FROM customer WHERE person_id = 5;

@@ -191,3 +191,4 @@ class CustomerData(BaseModel):
     address: Address
     idType: str
     idNumber: str
+    password: Optional[str] = None

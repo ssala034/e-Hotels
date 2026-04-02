@@ -2,20 +2,22 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <section className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-black px-6 py-16">
-      <div className="w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 p-10 text-center shadow-sm">
-        <h1 className="text-3xl font-semibold leading-tight text-zinc-100 sm:text-4xl">
-          The best online hotel booking system
-        </h1>
-        <p className="mt-4 text-base text-zinc-300 sm:text-lg">
-          Find your next stay in minutes with a simple and friendly booking experience.
-        </p>
-        <Link
-          href="/login"
-          className="mt-8 inline-flex h-11 items-center justify-center rounded-full bg-zinc-100 px-6 text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-300"
-        >
-          Get Start
-        </Link>
+    <section className="relative flex min-h-[calc(100vh-8rem)] items-center overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 px-6 py-16 text-white">
+      <div className="mx-auto w-full max-w-7xl">
+        <div className="max-w-2xl text-left md:pl-12 lg:pl-20">
+          <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl lg:text-6xl">
+            The best online hotel booking system
+          </h1>
+          <p className="mt-4 max-w-xl text-base text-slate-200 sm:text-lg">
+            Find your next stay in minutes with a simple and friendly booking experience.
+          </p>
+          <Link
+            href="/login"
+            className="mt-8 inline-flex h-11 items-center justify-center rounded-full bg-sky-200 px-6 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-100"
+          >
+            Get Start
+          </Link>
+        </div>
       </div>
     </section>
   );

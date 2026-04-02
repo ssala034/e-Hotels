@@ -1,21 +1,22 @@
 SET search_path TO "HotelProject";
 
-CREATE OR REPLACE PROCEDURE sp_delete_hotel(
-    p_chain_id INTEGER,
-    p_hotel_id INTEGER
-)
+CREATE OR REPLACE FUNCTION trg_delete_hotel()
+RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
+DECLARE
+    v_chain_name TEXT;
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM hotels
-        WHERE chain_id = p_chain_id
-          AND hotel_id = p_hotel_id
-    ) THEN
-        RETURN;
+    -- Chain trigger already handles hotel internals; avoid duplicate work on nested calls.
+    IF pg_trigger_depth() > 1 THEN
+        RETURN OLD;
     END IF;
 
+    SELECT chain_name INTO v_chain_name
+    FROM hotel_chains
+    WHERE chain_id = OLD.chain_id;
+
+    -- Step 1: Archive all reservations for this hotel
     INSERT INTO archived_reservation (
         archive_date,
         creation_date,
@@ -42,8 +43,8 @@ BEGIN
             WHEN hr.reservation_type = 'renting' THEN hrt.price_paid
             ELSE NULL
         END,
-        h.hotel_name,
-        hc.chain_name,
+        OLD.hotel_name,
+        v_chain_name,
         hr.room_num,
         hr.person_id,
         hrt.person_id,
@@ -63,51 +64,89 @@ BEGIN
         hr.start_date,
         hr.end_date
     FROM hotel_reservation hr
-    LEFT JOIN hotels h
-        ON h.chain_id = hr.chain_id AND h.hotel_id = hr.hotel_id
-    LEFT JOIN hotel_chains hc
-        ON hc.chain_id = hr.chain_id
     LEFT JOIN person p
         ON p.person_id = hr.person_id
     LEFT JOIN hotel_booking hb
         ON hb.reservation_id = hr.reservation_id
     LEFT JOIN hotel_renting hrt
         ON hrt.reservation_id = hr.reservation_id
-    WHERE hr.chain_id = p_chain_id
-      AND hr.hotel_id = p_hotel_id;
+    WHERE hr.chain_id = OLD.chain_id
+      AND hr.hotel_id = OLD.hotel_id;
 
+    -- Step 2: Clean up reservation dependencies
     DELETE FROM has hs
     USING hotel_reservation hr
     WHERE hs.reservation_id = hr.reservation_id
-      AND hr.chain_id = p_chain_id
-      AND hr.hotel_id = p_hotel_id;
+      AND hr.chain_id = OLD.chain_id
+      AND hr.hotel_id = OLD.hotel_id;
 
-    DELETE FROM hotel_reservation hr
-    WHERE hr.chain_id = p_chain_id
-      AND hr.hotel_id = p_hotel_id;
+    DELETE FROM hotel_reservation
+    WHERE chain_id = OLD.chain_id
+      AND hotel_id = OLD.hotel_id;
 
+    -- Step 3: Delete rooms (trg_delete_room exits at depth > 1)
+    DELETE FROM rooms
+    WHERE chain_id = OLD.chain_id
+      AND hotel_id = OLD.hotel_id;
+
+    -- Step 4: Delete person rows for non-manager employees (chain-style cleanup).
+    DELETE FROM person
+    WHERE person_id IN (
+        SELECT e.person_id
+        FROM employee e
+        WHERE e.chain_id = OLD.chain_id
+          AND e.hotel_id = OLD.hotel_id
+          AND e.person_id <> OLD.manager_id
+    );
+
+    -- Step 5: Delete all employees for this hotel (manager included).
     DELETE FROM employee
-    WHERE chain_id = p_chain_id
-      AND hotel_id = p_hotel_id;
+    WHERE chain_id = OLD.chain_id
+      AND hotel_id = OLD.hotel_id;
 
-    DELETE FROM hotels
-    WHERE chain_id = p_chain_id
-      AND hotel_id = p_hotel_id;
+    RETURN OLD;
+
+EXCEPTION WHEN OTHERS THEN
+    RAISE EXCEPTION 'trg_delete_hotel failed for hotel_id %: %', OLD.hotel_id, SQLERRM;
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_delete_hotel ON hotels;
+DROP TRIGGER IF EXISTS trg_delete_hotel_manager_person ON hotels;
+
+CREATE TRIGGER trg_delete_hotel
+    BEFORE DELETE ON hotels
+    FOR EACH ROW
+    EXECUTE FUNCTION trg_delete_hotel();
+
+CREATE OR REPLACE FUNCTION trg_delete_hotel_manager_person()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Remove former manager person row only when no role/reference remains.
+    IF OLD.manager_id IS NOT NULL
+       AND NOT EXISTS (
+           SELECT 1 FROM employee WHERE person_id = OLD.manager_id
+       )
+       AND NOT EXISTS (
+           SELECT 1 FROM customer WHERE person_id = OLD.manager_id
+       )
+       AND NOT EXISTS (
+           SELECT 1 FROM hotels WHERE manager_id = OLD.manager_id
+       ) THEN
+        DELETE FROM person
+        WHERE person_id = OLD.manager_id;
+    END IF;
+
+    RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER trg_delete_hotel_manager_person
+    AFTER DELETE ON hotels
+    FOR EACH ROW
+    EXECUTE FUNCTION trg_delete_hotel_manager_person();
+
 -- Example
--- CALL sp_delete_hotel(1, 1);
-
-
---- removed active reservation check clause
-
--- IF EXISTS (
---         SELECT 1
---         FROM hotel_reservation hr
---         WHERE hr.chain_id = p_chain_id
---           AND hr.hotel_id = p_hotel_id
---           AND hr.status IN ('Pending', 'Confirmed', 'CheckedIn')
---     ) THEN
---         RETURN;
---     END IF;
+-- DELETE FROM hotels WHERE chain_id = 1 AND hotel_id = 1;

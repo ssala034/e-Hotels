@@ -329,6 +329,7 @@ export interface CustomerData {
   address: Address;
   idType: IDType;
   idNumber: string;
+  password?: string;
 }
 
 // Filter types
