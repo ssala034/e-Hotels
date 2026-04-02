@@ -1,4 +1,3 @@
--- Note: surrogate key
 -- Assume area == region
 SET search_path TO "HotelProject";
 
@@ -268,8 +267,6 @@ SELECT
     'Manager'
 FROM person JOIN hotels ON person.ssn_number = 'SSN-' || LPAD(hotels.hotel_id::TEXT, 3, '0');
 
--- Note the ON mathcing here is a bit risky but should work for now
-
 -- ========================
 -- Update hotels with their manager
 -- ========================
@@ -277,62 +274,3 @@ UPDATE hotels
 SET manager_id = e.person_id
 FROM employee e
 WHERE hotels.chain_id = e.chain_id AND hotels.hotel_id = e.hotel_id AND e.role = 'Manager';
-
-
-
--- select hotels.chain_id, hotels.hotel_id, hotels.hotel_name,  from hotels join rooms using (chain_id, hotel_id);
--- select * from hotel_chains;
---select chain_id, hotel_id, hotel_name, person.person_id, person.email, person.password from hotels join person on hotels.manager_id = person.person_id;
-
-
-
-
--- OLD POPULATION:
-
--- Set one employee to be manager of 2 hotels
--- UPDATE hotels
--- SET manager_id = 1
--- FROM employee e
--- WHERE hotels.chain_id = 3 AND hotels.hotel_name = 'The Ritz Toronto';
-
--- INSERT INTO room_amenities (chain_id, hotel_id, room_num, amenity)
--- SELECT 
---     chain_id, 
---     hotel_id, 
---     room_num, 
---     'Free WiFi'
--- FROM rooms
--- ON CONFLICT DO NOTHING; -- while working just there so no conflict
-
--- INSERT INTO room_extendible (chain_id, hotel_id, room_num, extendible)
--- SELECT 
---     chain_id, 
---     hotel_id, 
---     room_num, 
---     'Sofa Bed'
--- FROM rooms
--- WHERE capacity >= 2  -- Only "bigger" rooms are extendible
--- ON CONFLICT DO NOTHING;
-
-
--- INSERT INTO room_issue (chain_id, hotel_id, room_num, room_issue)
--- SELECT 
---     chain_id, 
---     hotel_id, 
---     room_num, 
---     'Leaking Faucet'
--- FROM rooms
--- WHERE status = 'Maintenance' -- Naturally, rooms in maintenance have issues
--- ON CONFLICT DO NOTHING;
-
--- -- Adding one specific manual issue for variety
--- INSERT INTO room_issue (chain_id, hotel_id, room_num, room_issue)
--- SELECT chain_id, hotel_id, room_num, 'AC Remote Missing'
--- FROM rooms
--- LIMIT 3; -- Just pick the first 3 rooms to have this specific issue
-
--- -- select * from room_amenities;
-
-
-
-

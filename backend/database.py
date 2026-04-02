@@ -3027,7 +3027,7 @@ def db_create_payment(data):
 
 # --- Search ---
 
-def db_search_available_rooms(criteria):  # shuaib0-0
+def db_search_available_rooms(criteria):
     """
     Search for available rooms based on criteria.
     Filters by price range and applies date-based availability checks.

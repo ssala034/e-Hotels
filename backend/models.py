@@ -1,11 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
 
-'''
-Double check this code as we may NOT BE ALLOWED THIS CAUSE 
-IT IS MIMICING AN ORM BUT NO ORM LIBRARY
-'''
-
 # ============================================================================
 # Shared
 # ============================================================================
