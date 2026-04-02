@@ -28,7 +28,7 @@ BEGIN
         CURRENT_TIMESTAMP,
         hr.created_at,
         CASE
-            WHEN hr.reservation_type = 'renting' THEN hrt.price_paid
+            WHEN hr.reservation_type = 'renting' THEN COALESCE(hrt.price_paid, hrt.rental_price)
             ELSE NULL
         END,
         h.hotel_name,
@@ -90,7 +90,7 @@ $$;
 DROP TRIGGER IF EXISTS trg_delete_customer ON customer;
 
 CREATE TRIGGER trg_delete_customer
-    BEFORE DELETE ON customer
+    AFTER DELETE ON customer
     FOR EACH ROW
     EXECUTE FUNCTION trg_delete_customer();
 

@@ -276,6 +276,7 @@ export async function deleteHotel(id: string): Promise<void> {
 export async function getAllRooms(filters?: RoomFilters): Promise<Room[]> {
   const qs = toQueryString({
     hotelId: filters?.hotelId,
+    managerId: filters?.managerId,
     capacity: filters?.capacity,
     minPrice: filters?.minPrice,
     maxPrice: filters?.maxPrice,

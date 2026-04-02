@@ -60,6 +60,7 @@ export type IDType = 'SSN' | 'SIN' | 'Driver License' | 'Passport';
 
 export interface Employee {
   id: string;
+  personId?: number;
   firstName: string;
   lastName: string;
   email: string;
@@ -301,7 +302,7 @@ export interface RoomData {
   roomType: string;
   price: number;
   amenities: string[];
-  capacity: RoomCapacity;
+  capacity: RoomCapacity | number;
   viewType: ViewType;
   isExtendable: boolean;
   problems?: string;
@@ -342,6 +343,7 @@ export interface HotelFilters {
 
 export interface RoomFilters {
   hotelId?: string;
+  managerId?: number;
   capacity?: RoomCapacity;
   minPrice?: number;
   maxPrice?: number;

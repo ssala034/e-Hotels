@@ -289,8 +289,5 @@ CREATE TABLE IF NOT EXISTS archived_reservation (
         'converted_from_booking', 'direct_renting', 'completed_renting'
     ) OR archived_subtype IS NULL),
     CHECK (archived_price_paid IS NULL OR archived_price_paid >= 0),
-    CHECK (res_end_date IS NULL OR res_start_date IS NULL OR res_end_date > res_start_date),
-    CHECK (
-        archived_type != 'renting' OR archived_price_paid IS NOT NULL
-    )
+    CHECK (res_end_date IS NULL OR res_start_date IS NULL OR res_end_date > res_start_date)
 );

@@ -3,7 +3,12 @@ SET search_path TO "HotelProject";
 WITH room_data AS (
     SELECT chain_id, hotel_id, room_num, price
     FROM rooms
-    WHERE hotel_id = 5 AND room_num = '501'
+    WHERE hotel_id = 5 AND room_num = '401'
+),
+customer_info AS (
+    SELECT person_id, first_name, last_name
+    FROM person
+    WHERE person_id = 42
 ),
 new_reservation AS (
     INSERT INTO hotel_reservation (
@@ -17,9 +22,9 @@ new_reservation AS (
         CURRENT_TIMESTAMP, 
         'booking', 
         'Confirmed', 
-        1, 
+        person_id,
         chain_id, hotel_id, room_num
-    FROM room_data
+    FROM room_data, customer_info
     WHERE NOT EXISTS ( -- don't want to make a reservation if there's already a conflicting one
         SELECT 1 
         FROM hotel_reservation r
@@ -29,7 +34,7 @@ new_reservation AS (
           AND r.status NOT IN ('Cancelled', 'CheckedOut', 'Completed')
           AND r.start_date < '2026-04-05' 
           AND r.end_date > '2026-04-01'
-    );
+    )
     
     RETURNING reservation_id, chain_id, hotel_id, room_num, start_date, end_date, (SELECT price FROM room_data) as daily_price
 ),

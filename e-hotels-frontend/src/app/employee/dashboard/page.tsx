@@ -76,16 +76,16 @@ export default function EmployeeDashboardPage() {
 
     setIsLoading(true);
     try {
-      const isEmployee = user.role === 'Employee';
-      const hotelId = user.hotelId;
+      const scopedHotelId = user.hotelId;
+      const shouldScopeToHotel = Boolean(scopedHotelId);
 
-      if (isEmployee && !hotelId) {
+      if (user.role === 'Employee' && !scopedHotelId) {
         throw new Error('Employee is not assigned to a hotel');
       }
 
       const [bookingsData, rentingsData] = await Promise.all([
-        isEmployee ? getHotelBookings(hotelId as string) : getAllBookings(),
-        isEmployee ? getHotelRentings(hotelId as string) : getAllRentings(),
+        shouldScopeToHotel ? getHotelBookings(scopedHotelId as string) : getAllBookings(),
+        shouldScopeToHotel ? getHotelRentings(scopedHotelId as string) : getAllRentings(),
       ]);
       setBookings(bookingsData);
       setRentings(rentingsData);
@@ -264,15 +264,15 @@ export default function EmployeeDashboardPage() {
         booking.id.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const currentHotelRentings = rentings.filter(
-    (r) => user?.role !== 'Employee' || r.room?.hotelId === user?.hotelId
+  const currentHotelRentings = rentings.filter((r) =>
+    !user?.hotelId || r.room?.hotelId === user.hotelId
   );
 
   const unpaidRentings = rentings.filter((r) => {
-    // Check if total amount is greater than amount paid and belongs to employee's hotel
+    // Check if total amount is greater than amount paid and belongs to the assigned hotel
     return (
       r.amountPaid < r.totalAmount &&
-      (user?.role !== 'Employee' || r.room?.hotelId === user?.hotelId)
+      (!user?.hotelId || r.room?.hotelId === user.hotelId)
     );
   });
 

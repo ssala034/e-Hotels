@@ -135,16 +135,21 @@ def _extract_room_parts(room_id):
 
 def _capacity_to_number(capacity):
     if isinstance(capacity, int):
-        return capacity
+        return max(1, min(10, capacity))
+
+    text = str(capacity).strip()
+    if text.isdigit():
+        return max(1, min(10, int(text)))
+
     mapping = {
         "single": 1,
         "double": 2,
         "triple": 3,
-        "suite": 5,
+        "suite": 4,
         "family": 4,
         "studio": 2,
     }
-    return mapping.get(str(capacity).lower(), 2)
+    return mapping.get(text.lower(), 2)
 
 
 def _view_to_db(view_type):
@@ -364,7 +369,7 @@ def _map_room_row(row):
     view_type = f"{view} View" if view != "None" else "No View"
     issues = row["issues"] or []
     extendable_with = row.get("extendable_with") or []
-    return {
+    room = {
         "id": f"room-{row['chain_id']}-{row['hotel_id']}-{row['room_num']}",
         "hotelId": f"hotel-{row['hotel_id']}",
         "roomNumber": str(row["room_num"]),
@@ -379,6 +384,14 @@ def _map_room_row(row):
         "issues": issues,
         "problems": (issues[0] if issues else None),
     }
+    if row.get("hotel_name") is not None:
+        room["hotel"] = {
+            "id": f"hotel-{row['hotel_id']}",
+            "name": row.get("hotel_name") or "Hotel",
+            "chainId": f"chain-{row['chain_id']}",
+            "category": row.get("hotel_category") or 3,
+        }
+    return room
 
 # --- Hotel Chains ---
 
@@ -909,6 +922,13 @@ def db_get_all_rooms(filters=None):
         where_clauses.append("r.hotel_id = %s")
         params.append(hotel_id)
 
+    manager_id = _extract_numeric_id(filters.get("managerId"))
+    if manager_id is not None:
+        where_clauses.append(
+            "EXISTS (SELECT 1 FROM hotels hm WHERE hm.chain_id = r.chain_id AND hm.hotel_id = r.hotel_id AND hm.manager_id = %s)"
+        )
+        params.append(manager_id)
+
     capacity = filters.get("capacity")
     if capacity:
         capacity_map = {
@@ -945,6 +965,8 @@ def db_get_all_rooms(filters=None):
             r.capacity,
             r.view,
             r.status,
+            h.hotel_name,
+            h.category AS hotel_category,
             (
                 SELECT ARRAY_AGG(ra.amenity ORDER BY ra.amenity)
                 FROM room_amenities ra
@@ -974,6 +996,7 @@ def db_get_all_rooms(filters=None):
                   AND ri.room_num = r.room_num
             ) AS issues
         FROM rooms r
+        JOIN hotels h ON h.chain_id = r.chain_id AND h.hotel_id = r.hotel_id
         {where_sql}
         ORDER BY r.chain_id, r.hotel_id, r.room_num;
     """
@@ -1180,16 +1203,18 @@ def db_update_room(room_id, data):
 
             cur.execute(delete_amenities, (chain_id, hotel_id, room_num))
             for amenity in data.get("amenities", []):
-                if amenity:
-                    cur.execute(insert_amenity, (chain_id, hotel_id, room_num, amenity))
+                normalized_amenity = str(amenity).strip()
+                if normalized_amenity:
+                    cur.execute(insert_amenity, (chain_id, hotel_id, room_num, normalized_amenity))
 
             cur.execute(delete_extend, (chain_id, hotel_id, room_num))
             if data.get("isExtendable"):
                 cur.execute(insert_extend, (chain_id, hotel_id, room_num, "Yes"))
 
             cur.execute(delete_issues, (chain_id, hotel_id, room_num))
-            if data.get("problems"):
-                cur.execute(insert_issue, (chain_id, hotel_id, room_num, data["problems"]))
+            issue_text = str(data.get("problems") or "").strip()
+            if issue_text:
+                cur.execute(insert_issue, (chain_id, hotel_id, room_num, issue_text))
 
         conn.commit()
         return db_get_room_by_id(f"room-{chain_id}-{hotel_id}-{room_num}")

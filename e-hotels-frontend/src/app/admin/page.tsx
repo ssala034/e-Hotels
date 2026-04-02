@@ -102,6 +102,7 @@ export default function AdminDashboardPage() {
     canBeExtended: true,
     isDamaged: false,
     amenities: '',
+    roomIssue: '',
   });
 
   const [employeeForm, setEmployeeForm] = useState({
@@ -145,7 +146,7 @@ export default function AdminDashboardPage() {
 
       const [hotelsData, roomsData, employeesData, customersData, archivedData] = await Promise.all([
         getAllHotels({ managerId: managerPersonId }),
-        getAllRooms({ hotelId: managerHotelId }),
+        getAllRooms({ managerId: managerPersonId }),
         getAllEmployees({ hotelId: managerHotelId }),
         getAllCustomers({ chainId: managerChainId, hotelId: managerHotelId }),
         getArchivedReservations({ chainId: managerChainId, hotelId: managerHotelId }),
@@ -322,21 +323,11 @@ export default function AdminDashboardPage() {
   // Room Handlers
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const capacityByNumber: Record<number, RoomCapacity> = {
-      1: 'Single',
-      2: 'Double',
-      3: 'Triple',
-      4: 'Suite',
-      5: 'Family',
-      6: 'Studio',
-    };
-
-    const normalizedCapacity = capacityByNumber[roomForm.capacity] ?? 'Double';
     const validViewTypes: ViewType[] = ['Sea View', 'Mountain View', 'City View', 'Garden View', 'No View'];
     const normalizedViewType: ViewType = validViewTypes.includes(roomForm.viewType as ViewType)
       ? (roomForm.viewType as ViewType)
       : 'No View';
+    const normalizedIssue = roomForm.roomIssue.trim();
 
     try {
       await createRoom({
@@ -344,11 +335,11 @@ export default function AdminDashboardPage() {
         roomNumber: roomForm.roomNumber,
         roomType: 'Standard',
         price: roomForm.pricePerNight,
-        capacity: normalizedCapacity,
+        capacity: roomForm.capacity,
         viewType: normalizedViewType,
         isExtendable: roomForm.canBeExtended,
         amenities: roomForm.amenities.split(',').map(a => a.trim()).filter(Boolean),
-        problems: roomForm.isDamaged ? 'Damaged' : undefined,
+        problems: normalizedIssue || (roomForm.isDamaged ? 'Damaged' : undefined),
       });
       toast({ title: 'Room created successfully' });
       setModalMode(null);
@@ -362,21 +353,11 @@ export default function AdminDashboardPage() {
   const handleUpdateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRoom) return;
-
-    const capacityByNumber: Record<number, RoomCapacity> = {
-      1: 'Single',
-      2: 'Double',
-      3: 'Triple',
-      4: 'Suite',
-      5: 'Family',
-      6: 'Studio',
-    };
-
-    const normalizedCapacity = capacityByNumber[roomForm.capacity] ?? 'Double';
     const validViewTypes: ViewType[] = ['Sea View', 'Mountain View', 'City View', 'Garden View', 'No View'];
     const normalizedViewType: ViewType = validViewTypes.includes(roomForm.viewType as ViewType)
       ? (roomForm.viewType as ViewType)
       : 'No View';
+    const normalizedIssue = roomForm.roomIssue.trim();
 
     try {
       await updateRoom(selectedRoom.id, {
@@ -384,11 +365,11 @@ export default function AdminDashboardPage() {
         roomNumber: roomForm.roomNumber,
         roomType: 'Standard',
         price: roomForm.pricePerNight,
-        capacity: normalizedCapacity,
+        capacity: roomForm.capacity,
         viewType: normalizedViewType,
         isExtendable: roomForm.canBeExtended,
         amenities: roomForm.amenities.split(',').map(a => a.trim()).filter(Boolean),
-        problems: roomForm.isDamaged ? 'Damaged' : undefined,
+        problems: normalizedIssue || (roomForm.isDamaged ? 'Damaged' : undefined),
       });
       toast({ title: 'Room updated successfully' });
       setModalMode(null);
@@ -466,7 +447,8 @@ export default function AdminDashboardPage() {
     if (!selectedEmployee) return;
 
     const isEditingManager = selectedEmployee.role === 'Manager';
-    const isCurrentManager = user?.personId === selectedEmployee.personId;
+    const selectedEmployeePersonId = Number.parseInt(selectedEmployee.id.replace('emp-', ''), 10);
+    const isCurrentManager = user?.personId === selectedEmployeePersonId;
     const replacementCandidates = employees.filter(
       (employee) => employee.hotelId === selectedEmployee.hotelId && employee.id !== selectedEmployee.id,
     );
@@ -601,7 +583,11 @@ export default function AdminDashboardPage() {
   }, [isEditingManager, selectedEmployee, employees]);
 
   const canTransferManagerRole = useMemo(
-    () => !!(isEditingManager && selectedEmployee && user?.personId === selectedEmployee.personId),
+    () => !!(
+      isEditingManager
+      && selectedEmployee
+      && user?.personId === Number.parseInt(selectedEmployee.id.replace('emp-', ''), 10)
+    ),
     [isEditingManager, selectedEmployee, user?.personId],
   );
 
@@ -1076,6 +1062,14 @@ export default function AdminDashboardPage() {
                         <Label>Amenities (comma-separated)</Label>
                         <Input value={roomForm.amenities} onChange={(e) => setRoomForm({ ...roomForm, amenities: e.target.value })} placeholder="WiFi, TV, Mini Bar" />
                       </div>
+                      <div className="space-y-2">
+                        <Label>Room Issue</Label>
+                        <Input
+                          value={roomForm.roomIssue}
+                          onChange={(e) => setRoomForm({ ...roomForm, roomIssue: e.target.value })}
+                          placeholder="e.g., Broken AC"
+                        />
+                      </div>
                       <div className="flex gap-4">
                         <label className="flex items-center space-x-2">
                           <input type="checkbox" checked={roomForm.canBeExtended} onChange={(e) => setRoomForm({ ...roomForm, canBeExtended: e.target.checked })} />
@@ -1102,8 +1096,13 @@ export default function AdminDashboardPage() {
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="font-semibold">Room #{room.roomNumber}</h3>
-                          <p className="text-sm text-muted-foreground">{room.hotel?.name || 'Hotel'}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {room.hotel?.name || hotels.find((hotel) => hotel.id === room.hotelId)?.name || 'Hotel'}
+                          </p>
                           <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline">
+                              {room.hotel?.name || hotels.find((hotel) => hotel.id === room.hotelId)?.name || 'Hotel'}
+                            </Badge>
                             <Badge>{room.hotel?.category || 3} Star Hotel</Badge>
                             <Badge variant="secondary">{room.capacity}</Badge>
                             <span className="text-sm font-semibold">{formatCurrency(room.price)}/night</span>
@@ -1124,6 +1123,7 @@ export default function AdminDashboardPage() {
                               canBeExtended: !!room.isExtendable,
                               isDamaged: !!room.problems,
                               amenities: (room.amenities || []).join(', '),
+                              roomIssue: room.problems || '',
                             });
                           }}>
                             <Edit className="w-4 h-4" />

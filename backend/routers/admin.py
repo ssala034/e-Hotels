@@ -142,12 +142,14 @@ def delete_hotel(hotel_id: str):
 @router.get("/rooms")
 def get_all_rooms(
     hotelId: Optional[str] = Query(None),
+    managerId: Optional[int] = Query(None),
     capacity: Optional[str] = Query(None),
     minPrice: Optional[float] = Query(None),
     maxPrice: Optional[float] = Query(None),
 ):
     return db_get_all_rooms({
         "hotelId": hotelId,
+        "managerId": managerId,
         "capacity": capacity,
         "minPrice": minPrice,
         "maxPrice": maxPrice,

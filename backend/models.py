@@ -150,7 +150,7 @@ class RoomData(BaseModel):
     roomType: str
     price: float
     amenities: List[str]
-    capacity: str
+    capacity: str | int
     viewType: str
     isExtendable: bool
     problems: Optional[str] = None
