@@ -4,6 +4,23 @@ from config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
 from datetime import datetime
 
 
+def _parse_iso_date(date_value):
+    return datetime.strptime(str(date_value), "%Y-%m-%d").date()
+
+
+def _validate_date_range(check_in, check_out):
+    try:
+        check_in_date = _parse_iso_date(check_in)
+        check_out_date = _parse_iso_date(check_out)
+    except (TypeError, ValueError):
+        raise ValueError("Invalid date format. Use YYYY-MM-DD.")
+
+    if check_in_date >= check_out_date:
+        raise ValueError("Check-out date must be after check-in date")
+
+    return check_in_date, check_out_date
+
+
 def _normalize_id_type(id_type):
     if not id_type:
         return "SSN"
@@ -118,16 +135,21 @@ def _extract_room_parts(room_id):
 
 def _capacity_to_number(capacity):
     if isinstance(capacity, int):
-        return capacity
+        return max(1, min(10, capacity))
+
+    text = str(capacity).strip()
+    if text.isdigit():
+        return max(1, min(10, int(text)))
+
     mapping = {
         "single": 1,
         "double": 2,
         "triple": 3,
-        "suite": 5,
+        "suite": 4,
         "family": 4,
         "studio": 2,
     }
-    return mapping.get(str(capacity).lower(), 2)
+    return mapping.get(text.lower(), 2)
 
 
 def _view_to_db(view_type):
@@ -347,7 +369,7 @@ def _map_room_row(row):
     view_type = f"{view} View" if view != "None" else "No View"
     issues = row["issues"] or []
     extendable_with = row.get("extendable_with") or []
-    return {
+    room = {
         "id": f"room-{row['chain_id']}-{row['hotel_id']}-{row['room_num']}",
         "hotelId": f"hotel-{row['hotel_id']}",
         "roomNumber": str(row["room_num"]),
@@ -362,6 +384,14 @@ def _map_room_row(row):
         "issues": issues,
         "problems": (issues[0] if issues else None),
     }
+    if row.get("hotel_name") is not None:
+        room["hotel"] = {
+            "id": f"hotel-{row['hotel_id']}",
+            "name": row.get("hotel_name") or "Hotel",
+            "chainId": f"chain-{row['chain_id']}",
+            "category": row.get("hotel_category") or 3,
+        }
+    return room
 
 # --- Hotel Chains ---
 
@@ -579,87 +609,12 @@ def db_delete_chain(chain_id):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Check if chain exists
-            cur.execute("SELECT 1 FROM hotel_chains WHERE chain_id = %s", (numeric_chain_id,))
+            cur.execute(
+                "DELETE FROM hotel_chains WHERE chain_id = %s RETURNING chain_id;",
+                (numeric_chain_id,)
+            )
             if not cur.fetchone():
                 return False
-
-            # Archive reservations
-            cur.execute("""
-                INSERT INTO archived_reservation (
-                    archive_date,
-                    creation_date,
-                    archived_price_paid,
-                    archived_hotel_name,
-                    archived_chain_name,
-                    archived_room_num,
-                    archived_customer_id,
-                    archived_employee_id,
-                    archived_customer_name,
-                    archived_status,
-                    archived_type,
-                    archived_subtype,
-                    archived_checked_in,
-                    archived_checked_out,
-                    archived_booked_date,
-                    res_start_date,
-                    res_end_date
-                )
-                SELECT
-                    CURRENT_TIMESTAMP,
-                    hr.created_at,
-                    CASE
-                        WHEN hr.reservation_type = 'renting' THEN hrt.price_paid
-                        ELSE NULL
-                    END,
-                    h.hotel_name,
-                    hc.chain_name,
-                    hr.room_num,
-                    hr.person_id,
-                    hrt.person_id,
-                    COALESCE(NULLIF(TRIM(CONCAT(p.first_name, ' ', p.last_name)), ''), 'Unknown Customer'),
-                    hr.status,
-                    hr.reservation_type,
-                    CASE
-                        WHEN hr.reservation_type = 'booking' AND hr.status = 'Cancelled' THEN 'cancelled_booking'
-                        WHEN hr.reservation_type = 'booking' THEN 'completed_booking'
-                        WHEN hr.reservation_type = 'renting' AND hr.converted_from_res_id IS NOT NULL THEN 'converted_from_booking'
-                        WHEN hr.reservation_type = 'renting' AND hr.status IN ('Completed', 'CheckedOut') THEN 'completed_renting'
-                        ELSE 'direct_renting'
-                    END,
-                    hrt.checked_in_time,
-                    hrt.checked_out_time,
-                    hb.booked_date,
-                    hr.start_date,
-                    hr.end_date
-                FROM hotel_reservation hr
-                LEFT JOIN hotels h ON h.chain_id = hr.chain_id AND h.hotel_id = hr.hotel_id
-                LEFT JOIN hotel_chains hc ON hc.chain_id = hr.chain_id
-                LEFT JOIN person p ON p.person_id = hr.person_id
-                LEFT JOIN hotel_booking hb ON hb.reservation_id = hr.reservation_id
-                LEFT JOIN hotel_renting hrt ON hrt.reservation_id = hr.reservation_id
-                WHERE hr.chain_id = %s;
-            """, (numeric_chain_id,))
-
-            # Delete has entries
-            cur.execute("""
-                DELETE FROM has hs
-                USING hotel_reservation hr
-                WHERE hs.reservation_id = hr.reservation_id
-                  AND hr.chain_id = %s;
-            """, (numeric_chain_id,))
-
-            # Delete reservations
-            cur.execute("DELETE FROM hotel_reservation WHERE chain_id = %s;", (numeric_chain_id,))
-
-            # Delete employees
-            cur.execute("DELETE FROM employee WHERE chain_id = %s;", (numeric_chain_id,))
-
-            # Delete hotels
-            cur.execute("DELETE FROM hotels WHERE chain_id = %s;", (numeric_chain_id,))
-
-            # Delete chain
-            cur.execute("DELETE FROM hotel_chains WHERE chain_id = %s;", (numeric_chain_id,))
 
         conn.commit()
         return True
@@ -930,7 +885,6 @@ def db_delete_hotel(hotel_id):
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Get chain_id for this hotel
             cur.execute("SELECT chain_id FROM hotels WHERE hotel_id = %s LIMIT 1;", (numeric_hotel_id,))
             row = cur.fetchone()
             if not row:
@@ -939,98 +893,13 @@ def db_delete_hotel(hotel_id):
             
             chain_id = row["chain_id"]
 
-            # Check if hotel exists
-            cur.execute("""
-                SELECT 1 FROM hotels
-                WHERE chain_id = %s AND hotel_id = %s
-            """, (chain_id, numeric_hotel_id))
+            cur.execute(
+                "DELETE FROM hotels WHERE chain_id = %s AND hotel_id = %s RETURNING hotel_id;",
+                (chain_id, numeric_hotel_id)
+            )
             if not cur.fetchone():
                 conn.rollback()
                 return False
-
-            # Archive reservations
-            cur.execute("""
-                INSERT INTO archived_reservation (
-                    archive_date,
-                    creation_date,
-                    archived_price_paid,
-                    archived_hotel_name,
-                    archived_chain_name,
-                    archived_room_num,
-                    archived_customer_id,
-                    archived_employee_id,
-                    archived_customer_name,
-                    archived_status,
-                    archived_type,
-                    archived_subtype,
-                    archived_checked_in,
-                    archived_checked_out,
-                    archived_booked_date,
-                    res_start_date,
-                    res_end_date
-                )
-                SELECT
-                    CURRENT_TIMESTAMP,
-                    hr.created_at,
-                    CASE
-                        WHEN hr.reservation_type = 'renting' THEN hrt.price_paid
-                        ELSE NULL
-                    END,
-                    h.hotel_name,
-                    hc.chain_name,
-                    hr.room_num,
-                    hr.person_id,
-                    hrt.person_id,
-                    COALESCE(NULLIF(TRIM(CONCAT(p.first_name, ' ', p.last_name)), ''), 'Unknown Customer'),
-                    hr.status,
-                    hr.reservation_type,
-                    CASE
-                        WHEN hr.reservation_type = 'booking' AND hr.status = 'Cancelled' THEN 'cancelled_booking'
-                        WHEN hr.reservation_type = 'booking' THEN 'completed_booking'
-                        WHEN hr.reservation_type = 'renting' AND hr.converted_from_res_id IS NOT NULL THEN 'converted_from_booking'
-                        WHEN hr.reservation_type = 'renting' AND hr.status IN ('Completed', 'CheckedOut') THEN 'completed_renting'
-                        ELSE 'direct_renting'
-                    END,
-                    hrt.checked_in_time,
-                    hrt.checked_out_time,
-                    hb.booked_date,
-                    hr.start_date,
-                    hr.end_date
-                FROM hotel_reservation hr
-                LEFT JOIN hotels h ON h.chain_id = hr.chain_id AND h.hotel_id = hr.hotel_id
-                LEFT JOIN hotel_chains hc ON hc.chain_id = hr.chain_id
-                LEFT JOIN person p ON p.person_id = hr.person_id
-                LEFT JOIN hotel_booking hb ON hb.reservation_id = hr.reservation_id
-                LEFT JOIN hotel_renting hrt ON hrt.reservation_id = hr.reservation_id
-                WHERE hr.chain_id = %s AND hr.hotel_id = %s;
-            """, (chain_id, numeric_hotel_id))
-
-            # Delete has entries
-            cur.execute("""
-                DELETE FROM has hs
-                USING hotel_reservation hr
-                WHERE hs.reservation_id = hr.reservation_id
-                  AND hr.chain_id = %s
-                  AND hr.hotel_id = %s;
-            """, (chain_id, numeric_hotel_id))
-
-            # Delete reservations
-            cur.execute("""
-                DELETE FROM hotel_reservation
-                WHERE chain_id = %s AND hotel_id = %s;
-            """, (chain_id, numeric_hotel_id))
-
-            # Delete employees
-            cur.execute("""
-                DELETE FROM employee
-                WHERE chain_id = %s AND hotel_id = %s;
-            """, (chain_id, numeric_hotel_id))
-
-            # Delete hotel
-            cur.execute("""
-                DELETE FROM hotels
-                WHERE chain_id = %s AND hotel_id = %s;
-            """, (chain_id, numeric_hotel_id))
 
         conn.commit()
         return True
@@ -1052,6 +921,13 @@ def db_get_all_rooms(filters=None):
     if hotel_id is not None:
         where_clauses.append("r.hotel_id = %s")
         params.append(hotel_id)
+
+    manager_id = _extract_numeric_id(filters.get("managerId"))
+    if manager_id is not None:
+        where_clauses.append(
+            "EXISTS (SELECT 1 FROM hotels hm WHERE hm.chain_id = r.chain_id AND hm.hotel_id = r.hotel_id AND hm.manager_id = %s)"
+        )
+        params.append(manager_id)
 
     capacity = filters.get("capacity")
     if capacity:
@@ -1089,6 +965,8 @@ def db_get_all_rooms(filters=None):
             r.capacity,
             r.view,
             r.status,
+            h.hotel_name,
+            h.category AS hotel_category,
             (
                 SELECT ARRAY_AGG(ra.amenity ORDER BY ra.amenity)
                 FROM room_amenities ra
@@ -1118,6 +996,7 @@ def db_get_all_rooms(filters=None):
                   AND ri.room_num = r.room_num
             ) AS issues
         FROM rooms r
+        JOIN hotels h ON h.chain_id = r.chain_id AND h.hotel_id = r.hotel_id
         {where_sql}
         ORDER BY r.chain_id, r.hotel_id, r.room_num;
     """
@@ -1324,16 +1203,18 @@ def db_update_room(room_id, data):
 
             cur.execute(delete_amenities, (chain_id, hotel_id, room_num))
             for amenity in data.get("amenities", []):
-                if amenity:
-                    cur.execute(insert_amenity, (chain_id, hotel_id, room_num, amenity))
+                normalized_amenity = str(amenity).strip()
+                if normalized_amenity:
+                    cur.execute(insert_amenity, (chain_id, hotel_id, room_num, normalized_amenity))
 
             cur.execute(delete_extend, (chain_id, hotel_id, room_num))
             if data.get("isExtendable"):
                 cur.execute(insert_extend, (chain_id, hotel_id, room_num, "Yes"))
 
             cur.execute(delete_issues, (chain_id, hotel_id, room_num))
-            if data.get("problems"):
-                cur.execute(insert_issue, (chain_id, hotel_id, room_num, data["problems"]))
+            issue_text = str(data.get("problems") or "").strip()
+            if issue_text:
+                cur.execute(insert_issue, (chain_id, hotel_id, room_num, issue_text))
 
         conn.commit()
         return db_get_room_by_id(f"room-{chain_id}-{hotel_id}-{room_num}")
@@ -1370,102 +1251,13 @@ def db_delete_room(room_id):
             chain_id = row["chain_id"]
             hotel_id = row["hotel_id"]
 
-            # Check if room exists
-            cur.execute("""
-                SELECT 1 FROM rooms
-                WHERE chain_id = %s
-                  AND hotel_id = %s
-                  AND TRIM(room_num) = TRIM(%s)
-            """, (chain_id, hotel_id, room_num))
+            cur.execute(
+                "DELETE FROM rooms WHERE chain_id = %s AND hotel_id = %s AND TRIM(room_num) = TRIM(%s) RETURNING room_num;",
+                (chain_id, hotel_id, room_num)
+            )
             if not cur.fetchone():
                 conn.rollback()
                 return False
-
-            # Archive reservations
-            cur.execute("""
-                INSERT INTO archived_reservation (
-                    archive_date,
-                    creation_date,
-                    archived_price_paid,
-                    archived_hotel_name,
-                    archived_chain_name,
-                    archived_room_num,
-                    archived_customer_id,
-                    archived_employee_id,
-                    archived_customer_name,
-                    archived_status,
-                    archived_type,
-                    archived_subtype,
-                    archived_checked_in,
-                    archived_checked_out,
-                    archived_booked_date,
-                    res_start_date,
-                    res_end_date
-                )
-                SELECT
-                    CURRENT_TIMESTAMP,
-                    hr.created_at,
-                    CASE
-                        WHEN hr.reservation_type = 'renting' THEN COALESCE(hrt.price_paid, NULL)
-                        ELSE NULL
-                    END,
-                    h.hotel_name,
-                    hc.chain_name,
-                    hr.room_num,
-                    hr.person_id,
-                    hrt.person_id,
-                    COALESCE(NULLIF(TRIM(CONCAT(p.first_name, ' ', p.last_name)), ''), 'Unknown Customer'),
-                    hr.status,
-                    hr.reservation_type,
-                    CASE
-                        WHEN hr.reservation_type = 'booking' AND hr.status = 'Cancelled' THEN 'cancelled_booking'
-                        WHEN hr.reservation_type = 'booking' THEN 'completed_booking'
-                        WHEN hr.reservation_type = 'renting' AND hr.converted_from_res_id IS NOT NULL THEN 'converted_from_booking'
-                        WHEN hr.reservation_type = 'renting' AND hr.status IN ('Completed', 'CheckedOut') THEN 'completed_renting'
-                        ELSE 'direct_renting'
-                    END,
-                    hrt.checked_in_time,
-                    hrt.checked_out_time,
-                    hb.booked_date,
-                    hr.start_date,
-                    hr.end_date
-                FROM hotel_reservation hr
-                LEFT JOIN hotels h ON h.chain_id = hr.chain_id AND h.hotel_id = hr.hotel_id
-                LEFT JOIN hotel_chains hc ON hc.chain_id = hr.chain_id
-                LEFT JOIN person p ON p.person_id = hr.person_id
-                LEFT JOIN hotel_booking hb ON hb.reservation_id = hr.reservation_id
-                LEFT JOIN hotel_renting hrt ON hrt.reservation_id = hr.reservation_id
-                WHERE hr.chain_id = %s
-                  AND hr.hotel_id = %s
-                  AND TRIM(hr.room_num) = TRIM(%s)
-                  AND hr.status NOT IN ('Pending', 'Confirmed', 'CheckedIn');
-            """, (chain_id, hotel_id, room_num))
-
-            # Delete has entries
-            cur.execute("""
-                DELETE FROM has hs
-                USING hotel_reservation hr
-                WHERE hs.reservation_id = hr.reservation_id
-                  AND hr.chain_id = %s
-                  AND hr.hotel_id = %s
-                  AND TRIM(hr.room_num) = TRIM(%s);
-            """, (chain_id, hotel_id, room_num))
-
-            # Delete reservations
-            cur.execute("""
-                DELETE FROM hotel_reservation
-                WHERE chain_id = %s
-                  AND hotel_id = %s
-                  AND TRIM(room_num) = TRIM(%s);
-            """, (chain_id, hotel_id, room_num))
-
-            # Delete room
-            cur.execute("""
-                DELETE FROM rooms
-                WHERE chain_id = %s
-                  AND hotel_id = %s
-                  AND TRIM(room_num) = TRIM(%s);
-            """, (chain_id, hotel_id, room_num))
 
         conn.commit()
         return True
@@ -1659,6 +1451,9 @@ def db_create_employee_for_manager(data, manager_person_id):
     target_chain_id = _extract_numeric_id(data.get("chainId"))
     target_hotel_name = str(data.get("hotelName") or "").strip()
 
+    if data.get("role") == "Manager":
+        raise ValueError("Manager role cannot be assigned when creating an employee")
+
     if target_chain_id is None or not target_hotel_name:
         return None
 
@@ -1803,7 +1598,7 @@ def db_get_employee_by_id(employee_id):
     finally:
         conn.close()
 
-def db_update_employee(employee_id, data):
+def db_update_employee(employee_id, data, manager_person_id=None, replacement_manager_person_id=None):
     person_id = _extract_numeric_id(employee_id)
     if person_id is None:
         return None
@@ -1838,9 +1633,78 @@ def db_update_employee(employee_id, data):
         WHERE person_id = %s;
     """
 
+    query_employee_context = """
+        SELECT chain_id, hotel_id, role
+        FROM employee
+        WHERE person_id = %s
+        LIMIT 1;
+    """
+
+    query_replacement_employee = """
+        SELECT person_id
+        FROM employee
+        WHERE person_id = %s
+          AND chain_id = %s
+          AND hotel_id = %s
+        LIMIT 1;
+    """
+
+    update_employee_role = """
+        UPDATE employee
+        SET role = %s
+        WHERE person_id = %s;
+    """
+
+    promote_replacement_manager = """
+        UPDATE employee
+        SET role = 'Manager'
+        WHERE person_id = %s
+          AND chain_id = %s
+          AND hotel_id = %s;
+    """
+
+    update_hotel_manager = """
+        UPDATE hotels
+        SET manager_id = %s
+        WHERE chain_id = %s
+          AND hotel_id = %s;
+    """
+
+    manager_person_numeric_id = _extract_numeric_id(manager_person_id)
+    replacement_manager_numeric_id = _extract_numeric_id(replacement_manager_person_id)
+    new_role = data["role"]
+
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            cur.execute(query_employee_context, (person_id,))
+            employee_context = cur.fetchone()
+            if not employee_context:
+                conn.rollback()
+                return None
+
+            current_chain_id, current_hotel_id, current_role = employee_context
+            is_manager_transfer = current_role == "Manager" and new_role != "Manager"
+
+            if current_role != "Manager" and new_role == "Manager":
+                raise ValueError("Manager role cannot be assigned directly. Use manager transfer.")
+
+            if is_manager_transfer:
+                if manager_person_numeric_id is None or manager_person_numeric_id != person_id:
+                    raise PermissionError("Only the current manager can transfer the manager role.")
+                if replacement_manager_numeric_id is None:
+                    raise ValueError("A replacement manager must be selected.")
+                if replacement_manager_numeric_id == person_id:
+                    raise ValueError("Replacement manager must be a different employee.")
+
+                cur.execute(
+                    query_replacement_employee,
+                    (replacement_manager_numeric_id, current_chain_id, current_hotel_id),
+                )
+                replacement_employee = cur.fetchone()
+                if not replacement_employee:
+                    raise ValueError("Replacement manager must belong to the same hotel.")
+
             cur.execute(
                 query_person,
                 (
@@ -1863,7 +1727,20 @@ def db_update_employee(employee_id, data):
                 conn.rollback()
                 return None
 
-            cur.execute(query_employee, (chain_id, hotel_id, data["role"], person_id))
+            if is_manager_transfer:
+                cur.execute(update_employee_role, (new_role, person_id))
+                cur.execute(
+                    promote_replacement_manager,
+                    (replacement_manager_numeric_id, current_chain_id, current_hotel_id),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError("Could not promote the selected replacement manager.")
+                cur.execute(
+                    update_hotel_manager,
+                    (replacement_manager_numeric_id, current_chain_id, current_hotel_id),
+                )
+            else:
+                cur.execute(query_employee, (chain_id, hotel_id, data["role"], person_id))
 
         conn.commit()
         return db_get_employee_by_id(person_id)
@@ -1881,29 +1758,9 @@ def db_delete_employee(employee_id):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Check if employee exists
-            cur.execute("SELECT 1 FROM employee WHERE person_id = %s", (person_id,))
+            cur.execute("DELETE FROM employee WHERE person_id = %s RETURNING person_id;", (person_id,))
             if not cur.fetchone():
                 return False
-
-            # Check if employee is a manager
-            cur.execute("SELECT 1 FROM hotels WHERE manager_id = %s", (person_id,))
-            if cur.fetchone():
-                conn.rollback()
-                return False
-
-            # Delete from employee
-            cur.execute("DELETE FROM employee WHERE person_id = %s;", (person_id,))
-
-            # Assign renting to manager of the hotel
-            cur.execute("""
-                UPDATE hotel_renting
-                SET person_id = (SELECT manager_id FROM hotels WHERE manager_id = %s)
-                WHERE person_id = %s;
-            """, (person_id, person_id))
-
-            # Delete from person
-            cur.execute("DELETE FROM person WHERE person_id = %s;", (person_id,))
 
         conn.commit()
         return True
@@ -2055,7 +1912,8 @@ def db_update_customer(customer_id, data):
             street_name = %s,
             street_number = %s,
             postalcode = %s,
-            email = %s
+            email = %s,
+            password = COALESCE(NULLIF(NULLIF(%s, ''), '***'), password)
         WHERE person_id = %s
           AND person_id IN (SELECT person_id FROM customer);
     """
@@ -2077,6 +1935,7 @@ def db_update_customer(customer_id, data):
                     street_number,
                     data["address"]["zipCode"],
                     data["email"],
+                    data.get("password") or "",
                     person_id,
                 ),
             )
@@ -2100,89 +1959,9 @@ def db_delete_customer(customer_id):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Check if customer exists
-            cur.execute("SELECT 1 FROM customer WHERE person_id = %s", (person_id,))
+            cur.execute("DELETE FROM customer WHERE person_id = %s RETURNING person_id;", (person_id,))
             if not cur.fetchone():
                 return False
-
-            # Archive reservations
-            cur.execute("""
-                INSERT INTO archived_reservation (
-                    archive_date,
-                    creation_date,
-                    archived_price_paid,
-                    archived_hotel_name,
-                    archived_chain_name,
-                    archived_room_num,
-                    archived_customer_id,
-                    archived_employee_id,
-                    archived_customer_name,
-                    archived_status,
-                    archived_type,
-                    archived_subtype,
-                    archived_checked_in,
-                    archived_checked_out,
-                    archived_booked_date,
-                    res_start_date,
-                    res_end_date
-                )
-                SELECT
-                    CURRENT_TIMESTAMP,
-                    hr.created_at,
-                    CASE
-                        WHEN hr.reservation_type = 'renting' THEN COALESCE(hrt.price_paid, NULL)
-                        ELSE NULL
-                    END,
-                    h.hotel_name,
-                    hc.chain_name,
-                    hr.room_num,
-                    hr.person_id,
-                    hrt.person_id,
-                    COALESCE(NULLIF(TRIM(CONCAT(p.first_name, ' ', p.last_name)), ''), 'Unknown Customer'),
-                    hr.status,
-                    hr.reservation_type,
-                    CASE
-                        WHEN hr.reservation_type = 'booking' AND hr.status = 'Cancelled' THEN 'cancelled_booking'
-                        WHEN hr.reservation_type = 'booking' THEN 'completed_booking'
-                        WHEN hr.reservation_type = 'renting' AND hr.converted_from_res_id IS NOT NULL THEN 'converted_from_booking'
-                        WHEN hr.reservation_type = 'renting' AND hr.status IN ('Completed', 'CheckedOut') THEN 'completed_renting'
-                        ELSE 'direct_renting'
-                    END,
-                    hrt.checked_in_time,
-                    hrt.checked_out_time,
-                    hb.booked_date,
-                    hr.start_date,
-                    hr.end_date
-                FROM hotel_reservation hr
-                LEFT JOIN hotels h ON h.chain_id = hr.chain_id AND h.hotel_id = hr.hotel_id
-                LEFT JOIN hotel_chains hc ON hc.chain_id = hr.chain_id
-                LEFT JOIN person p ON p.person_id = hr.person_id
-                LEFT JOIN hotel_booking hb ON hb.reservation_id = hr.reservation_id
-                LEFT JOIN hotel_renting hrt ON hrt.reservation_id = hr.reservation_id
-                WHERE hr.person_id = %s;
-            """, (person_id,))
-
-            # Delete has entries
-            cur.execute("""
-                DELETE FROM has hs
-                USING hotel_reservation hr
-                WHERE hs.reservation_id = hr.reservation_id
-                  AND hr.person_id = %s;
-            """, (person_id,))
-
-            # Delete reservations
-            cur.execute("DELETE FROM hotel_reservation WHERE person_id = %s;", (person_id,))
-
-            # Check if person is also an employee
-            cur.execute("SELECT 1 FROM employee WHERE person_id = %s", (person_id,))
-            is_employee = cur.fetchone() is not None
-
-            if is_employee:
-                # Only delete from customer table if person is also employee
-                cur.execute("DELETE FROM customer WHERE person_id = %s;", (person_id,))
-            else:
-                # Delete from person table if not an employee
-                cur.execute("DELETE FROM person WHERE person_id = %s;", (person_id,))
 
         conn.commit()
         return True
@@ -2317,6 +2096,8 @@ def db_create_booking(data):
 
     if customer_person_id is None or room_num is None:
         return None
+
+    _validate_date_range(data.get("checkInDate"), data.get("checkOutDate"))
 
     room_lookup = """
         SELECT chain_id, hotel_id, room_num, price
@@ -3213,13 +2994,15 @@ def db_get_payments_by_renting(renting_id):
 
 def db_create_payment(data):
     reservation_id = _extract_numeric_id(data.get("rentingId"))
-    if reservation_id is None:
+    employee_person_id = _extract_numeric_id(data.get("employeeId"))
+    if reservation_id is None or employee_person_id is None:
         return None
 
     mark_paid_query = """
         UPDATE hotel_renting
         SET price_paid = rental_price
         WHERE reservation_id = %s
+                    AND person_id = %s
           AND price_paid IS NULL
           AND %s::numeric >= rental_price
         RETURNING rental_price;
@@ -3233,11 +3016,18 @@ def db_create_payment(data):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(mark_paid_query, (reservation_id, data["amount"]))
+            cur.execute(mark_paid_query, (reservation_id, employee_person_id, data["amount"]))
             paid_row = cur.fetchone()
             if not paid_row:
-                conn.rollback()
-                return None
+                cur.execute(
+                    "SELECT 1 FROM hotel_renting WHERE reservation_id = %s LIMIT 1;",
+                    (reservation_id,),
+                )
+                renting_exists = cur.fetchone() is not None
+                if not renting_exists:
+                    conn.rollback()
+                    return None
+                raise PermissionError("You can only process payments for rentings you converted.")
 
             cur.execute(complete_reservation_query, (reservation_id,))
             if cur.rowcount == 0:
@@ -3262,7 +3052,7 @@ def db_create_payment(data):
 
 # --- Search ---
 
-def db_search_available_rooms(criteria):  # shuaib0-0
+def db_search_available_rooms(criteria):
     """
     Search for available rooms based on criteria.
     Filters by price range and applies date-based availability checks.
@@ -3355,6 +3145,11 @@ def db_check_room_availability(room_id, check_in, check_out):
     chain_id, hotel_id, room_num = _extract_room_parts(room_id)
     if room_num is None:
         return True  # Not available if room cannot be identified
+
+    try:
+        _validate_date_range(check_in, check_out)
+    except ValueError:
+        return True
 
     query = """
         SELECT 1

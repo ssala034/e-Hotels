@@ -142,12 +142,14 @@ def delete_hotel(hotel_id: str):
 @router.get("/rooms")
 def get_all_rooms(
     hotelId: Optional[str] = Query(None),
+    managerId: Optional[int] = Query(None),
     capacity: Optional[str] = Query(None),
     minPrice: Optional[float] = Query(None),
     maxPrice: Optional[float] = Query(None),
 ):
     return db_get_all_rooms({
         "hotelId": hotelId,
+        "managerId": managerId,
         "capacity": capacity,
         "minPrice": minPrice,
         "maxPrice": maxPrice,
@@ -236,11 +238,28 @@ def create_employee(data: EmployeeData, managerPersonId: int = Query(..., ge=1))
 
 
 @router.put("/employees/{employee_id}")
-def update_employee(employee_id: str, data: EmployeeData):
-    emp = db_update_employee(employee_id, data.model_dump())
-    if not emp:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    return emp
+def update_employee(
+    employee_id: str,
+    data: EmployeeData,
+    managerPersonId: Optional[int] = Query(None, ge=1),
+    replacementManagerPersonId: Optional[int] = Query(None, ge=1),
+):
+    try:
+        emp = db_update_employee(
+            employee_id,
+            data.model_dump(),
+            manager_person_id=managerPersonId,
+            replacement_manager_person_id=replacementManagerPersonId,
+        )
+        if not emp:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        return emp
+    except HTTPException:
+        raise
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.delete("/employees/{employee_id}")

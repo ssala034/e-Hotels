@@ -13,6 +13,6 @@ INSERT INTO employee (person_id, chain_id, hotel_id, role)
 SELECT 
     person_id, 
     1,             -- The ChainID this employee works for
-    5,             -- The HotelID this employee works for
+    1,             -- The HotelID this employee works for
     'Receptionist' -- The specific role
 FROM new_person;

@@ -1,23 +1,16 @@
 SET search_path TO "HotelProject";
 
-CREATE OR REPLACE PROCEDURE sp_delete_room(
-    p_chain_id INTEGER,
-    p_hotel_id INTEGER,
-    p_room_num VARCHAR(5)
-)
+CREATE OR REPLACE FUNCTION trg_delete_room()
+RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM rooms
-        WHERE chain_id = p_chain_id
-          AND hotel_id = p_hotel_id
-          AND TRIM(room_num) = TRIM(p_room_num)
-    ) THEN
-        RETURN;
+    -- Called from hotel/chain cascade — exit immediately, parent handles everything
+    IF pg_trigger_depth() > 1 THEN
+        RETURN OLD;
     END IF;
 
+    -- Direct single room deletion — safe to JOIN hotels/hotel_chains (no mid-delete conflict)
     INSERT INTO archived_reservation (
         archive_date,
         creation_date,
@@ -75,41 +68,35 @@ BEGIN
         ON hb.reservation_id = hr.reservation_id
     LEFT JOIN hotel_renting hrt
         ON hrt.reservation_id = hr.reservation_id
-    WHERE hr.chain_id = p_chain_id
-      AND hr.hotel_id = p_hotel_id
-      AND TRIM(hr.room_num) = TRIM(p_room_num)
-      AND hr.status NOT IN ('Pending', 'Confirmed', 'CheckedIn');
+    WHERE hr.chain_id = OLD.chain_id
+      AND hr.hotel_id = OLD.hotel_id
+      AND TRIM(hr.room_num) = TRIM(OLD.room_num);
 
     DELETE FROM has hs
     USING hotel_reservation hr
     WHERE hs.reservation_id = hr.reservation_id
-      AND hr.chain_id = p_chain_id
-      AND hr.hotel_id = p_hotel_id
-      AND TRIM(hr.room_num) = TRIM(p_room_num);
+      AND hr.chain_id = OLD.chain_id
+      AND hr.hotel_id = OLD.hotel_id
+      AND TRIM(hr.room_num) = TRIM(OLD.room_num);
 
-    DELETE FROM hotel_reservation hr
-    WHERE hr.chain_id = p_chain_id
-      AND hr.hotel_id = p_hotel_id
-      AND TRIM(hr.room_num) = TRIM(p_room_num);
+    DELETE FROM hotel_reservation
+    WHERE chain_id = OLD.chain_id
+      AND hotel_id = OLD.hotel_id
+      AND TRIM(room_num) = TRIM(OLD.room_num);
 
-    DELETE FROM rooms
-    WHERE chain_id = p_chain_id
-      AND hotel_id = p_hotel_id
-      AND TRIM(room_num) = TRIM(p_room_num);
+    RETURN OLD;
+
+EXCEPTION WHEN OTHERS THEN
+    RAISE EXCEPTION 'trg_delete_room failed for room %: %', OLD.room_num, SQLERRM;
 END;
 $$;
 
--- Example
--- CALL sp_delete_room(1, 1, '101');
+DROP TRIGGER IF EXISTS trg_delete_room ON rooms;
 
---- removed active reservation check clause
--- IF EXISTS (
---         SELECT 1
---         FROM hotel_reservation hr
---         WHERE hr.chain_id = p_chain_id
---           AND hr.hotel_id = p_hotel_id
---           AND TRIM(hr.room_num) = TRIM(p_room_num)
---           AND hr.status IN ('Pending', 'Confirmed', 'CheckedIn')
---     ) THEN
---         RETURN;
---     END IF;
+CREATE TRIGGER trg_delete_room
+    BEFORE DELETE ON rooms
+    FOR EACH ROW
+    EXECUTE FUNCTION trg_delete_room();
+
+-- Example
+-- DELETE FROM rooms WHERE chain_id = 1 AND hotel_id = 1 AND TRIM(room_num) = '101';

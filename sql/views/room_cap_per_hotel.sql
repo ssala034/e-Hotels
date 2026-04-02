@@ -15,5 +15,3 @@ GROUP BY
     h.chain_id,
     h.hotel_id,
     h.hotel_name;
-
--- select * from rooms_cap_per_hotel;

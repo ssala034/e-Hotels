@@ -1,11 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
 
-'''
-Double check this code as we may NOT BE ALLOWED THIS CAUSE 
-IT IS MIMICING AN ORM BUT NO ORM LIBRARY
-'''
-
 # ============================================================================
 # Shared
 # ============================================================================
@@ -155,7 +150,7 @@ class RoomData(BaseModel):
     roomType: str
     price: float
     amenities: List[str]
-    capacity: str
+    capacity: str | int
     viewType: str
     isExtendable: bool
     problems: Optional[str] = None
@@ -191,3 +186,4 @@ class CustomerData(BaseModel):
     address: Address
     idType: str
     idNumber: str
+    password: Optional[str] = None

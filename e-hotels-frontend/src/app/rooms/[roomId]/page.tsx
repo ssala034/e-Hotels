@@ -20,6 +20,9 @@ export default function RoomDetailsPage() {
   const [room, setRoom] = useState<Room | null>(null);
   const [hotel, setHotel] = useState<Hotel | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [checkInDate, setCheckInDate] = useState('');
+  const [checkOutDate, setCheckOutDate] = useState('');
+  const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
     loadRoomDetails();
@@ -239,7 +242,15 @@ export default function RoomDetailsPage() {
                 <input
                   type="date"
                   id="checkIn"
-                  min={new Date().toISOString().split('T')[0]}
+                  value={checkInDate}
+                  onChange={(e) => {
+                    const nextCheckIn = e.target.value;
+                    setCheckInDate(nextCheckIn);
+                    if (checkOutDate && nextCheckIn && checkOutDate <= nextCheckIn) {
+                      setCheckOutDate('');
+                    }
+                  }}
+                  min={today}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
@@ -248,7 +259,9 @@ export default function RoomDetailsPage() {
                 <input
                   type="date"
                   id="checkOut"
-                  min={new Date().toISOString().split('T')[0]}
+                  value={checkOutDate}
+                  onChange={(e) => setCheckOutDate(e.target.value)}
+                  min={checkInDate || today}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
@@ -271,13 +284,22 @@ export default function RoomDetailsPage() {
               <Button 
                 className="w-full" 
                 onClick={() => {
-                  const checkIn = (document.getElementById('checkIn') as HTMLInputElement)?.value;
-                  const checkOut = (document.getElementById('checkOut') as HTMLInputElement)?.value;
+                  const checkIn = checkInDate;
+                  const checkOut = checkOutDate;
                   
                   if (!checkIn || !checkOut) {
                     toast({
                       title: 'Missing dates',
                       description: 'Please select check-in and check-out dates',
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+
+                  if (checkIn >= checkOut) {
+                    toast({
+                      title: 'Invalid dates',
+                      description: 'Check-out date must be after check-in date',
                       variant: 'destructive',
                     });
                     return;

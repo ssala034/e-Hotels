@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS hotel_chains(
 	country			VARCHAR(20) NOT NULL,
     city 			VARCHAR(30) NOT NULL,
     region			VARCHAR(30) NOT NULL,
-	street_name		VARCHAR(30) NOT NULL, -- removed street
+	street_name		VARCHAR(30) NOT NULL,
 	street_number	SMALLINT NOT NULL,
     postalcode		CHAR(6) NOT NULL,
 	PRIMARY KEY		(chain_id)
@@ -65,21 +65,21 @@ CREATE TABLE IF NOT EXISTS person (
 -- ========================
 CREATE TABLE IF NOT EXISTS hotels (
    chain_id			INTEGER,
-   hotel_id			INTEGER GENERATED ALWAYS AS IDENTITY, -- should I removed GENERATED ALWAYS AS IDENTITY cuz its (chain_id, hotel_id) that is unique, maybe too much logic?
+   hotel_id			INTEGER GENERATED ALWAYS AS IDENTITY,
    hotel_name		VARCHAR(25) NOT NULL,
    category			SMALLINT NOT NULL,
    country			VARCHAR(20) NOT NULL,
    city 			VARCHAR(30) NOT NULL,
    region			VARCHAR(30) NOT NULL,
-   street_name		VARCHAR(30) NOT NULL, -- removed street
+   street_name		VARCHAR(30) NOT NULL,
    street_number	SMALLINT NOT NULL,
    postalcode		CHAR(6) NOT NULL,
-   manager_id		INTEGER, -- don't forget to add trigger for this
+   manager_id		INTEGER,
 
    PRIMARY KEY (chain_id, hotel_id),
    FOREIGN KEY (chain_id) references hotel_chains 
    		ON DELETE CASCADE ON UPDATE CASCADE,
-   FOREIGN KEY (manager_id) REFERENCES person(person_id)  -- double check here
+   FOREIGN KEY (manager_id) REFERENCES person(person_id)
    		ON DELETE SET NULL ON UPDATE CASCADE,
    CHECK (postalcode SIMILAR TO '[A-Za-z0-9 \-]{3,10}'),
    CHECK (category >= 1 AND category <= 5),
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS hotel_phone (
 CREATE TABLE IF NOT EXISTS rooms (
     chain_id        INTEGER NOT NULL,
     hotel_id        INTEGER NOT NULL,
-    room_num        VARCHAR(5) NOT NULL,  -- format: FloorNumUnitNum, min 3 digits e.g. '405', assume max is 5 digits
+    room_num        VARCHAR(5) NOT NULL,
     price           NUMERIC(8,2) NOT NULL,
     capacity        SMALLINT NOT NULL,
     view            VARCHAR(10),
@@ -282,7 +282,6 @@ CREATE TABLE IF NOT EXISTS archived_reservation (
     res_start_date          DATE,
     res_end_date            DATE,
     PRIMARY KEY (archive_id),
-    -- No foreign keys by design (constraint 21: snapshots only)
     CHECK (archive_date <= CURRENT_TIMESTAMP),
     CHECK (archived_type IN ('booking', 'renting') OR archived_type IS NULL),
     CHECK (archived_subtype IN (
@@ -290,15 +289,5 @@ CREATE TABLE IF NOT EXISTS archived_reservation (
         'converted_from_booking', 'direct_renting', 'completed_renting'
     ) OR archived_subtype IS NULL),
     CHECK (archived_price_paid IS NULL OR archived_price_paid >= 0),
-    CHECK (res_end_date IS NULL OR res_start_date IS NULL OR res_end_date > res_start_date),
-    CHECK (
-        archived_type != 'renting' OR archived_price_paid IS NOT NULL
-    )
+    CHECK (res_end_date IS NULL OR res_start_date IS NULL OR res_end_date > res_start_date)
 );
-
-
--- see all tables
-SELECT table_name, column_name, data_type, is_nullable
-FROM information_schema.columns
-WHERE table_schema = 'HotelProject'
-ORDER BY table_name, ordinal_position;

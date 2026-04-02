@@ -1,49 +1,73 @@
 SET search_path TO "HotelProject";
 
-CREATE OR REPLACE PROCEDURE sp_delete_employee(
-    p_person_id INTEGER
-)
+CREATE OR REPLACE FUNCTION trg_delete_employee_before()
+RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM employee
-        WHERE person_id = p_person_id
-    ) THEN
-        RETURN;
+    -- Nested deletes from hotel/chain cleanup should only remove employee rows.
+    IF pg_trigger_depth() > 1 THEN
+        RETURN OLD;
     END IF;
 
     IF EXISTS (
         SELECT 1
         FROM hotels
-        WHERE manager_id = p_person_id -- can't delete the employee if he is a manager, user defined constraint, must make a new one first
-    ) THEN
-        RETURN;
+        WHERE manager_id = OLD.person_id
+    ) AND pg_trigger_depth() = 1 THEN
+        RETURN NULL;
     END IF;
 
-    DELETE FROM employee
-    WHERE person_id = p_person_id;
-
-    -- assign the renting to the manager of the hotel, user defined constraint
+    -- Direct employee delete flow: clear renting handler.
     UPDATE hotel_renting
-    SET person_id = (SELECT manager_id FROM hotels WHERE manager_id = p_person_id)
-    WHERE person_id = p_person_id;
+    SET person_id = NULL
+    WHERE person_id = OLD.person_id;
 
-    DELETE FROM person
-    WHERE person_id = p_person_id;
+    RETURN OLD;
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION trg_delete_employee_after()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Delete person only when no remaining role references exist.
+    IF NOT EXISTS (
+        SELECT 1
+        FROM employee
+        WHERE person_id = OLD.person_id
+    )
+    AND NOT EXISTS (
+        SELECT 1
+        FROM customer
+        WHERE person_id = OLD.person_id
+    )
+    AND NOT EXISTS (
+        SELECT 1
+        FROM hotels
+        WHERE manager_id = OLD.person_id
+    ) THEN
+        DELETE FROM person
+        WHERE person_id = OLD.person_id;
+    END IF;
+
+    RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_delete_employee ON employee;
+DROP TRIGGER IF EXISTS trg_delete_employee_after ON employee;
+
+CREATE TRIGGER trg_delete_employee
+    BEFORE DELETE ON employee
+    FOR EACH ROW
+    EXECUTE FUNCTION trg_delete_employee_before();
+
+CREATE TRIGGER trg_delete_employee_after
+    AFTER DELETE ON employee
+    FOR EACH ROW
+    EXECUTE FUNCTION trg_delete_employee_after();
+
 -- Example
--- CALL sp_delete_employee(12);
-
-
--- remove this check because don't make sense why? cause person_id is unique, so if he is also a customer, they will have different id for them
-
--- -- only delete from person if the person is not a customer, if he is a customer then let him live, will finally get him then
---     IF NOT EXISTS (
---         SELECT 1
---         FROM customer
---         WHERE person_id = p_person_id
---     ) THEN
+-- DELETE FROM employee WHERE person_id = 12;

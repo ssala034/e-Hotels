@@ -46,6 +46,7 @@ export default function ProfilePage() {
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
     email: user?.email || '',
+    password: '***',
     street: user?.address?.street || '',
     city: user?.address?.city || '',
     stateProvince: user?.address?.stateProvince || '',
@@ -111,7 +112,8 @@ export default function ProfilePage() {
     setIsSaving(true);
     try {
       const existingCustomer = customers.find(c => c.id === user.id);
-      const updatedCustomer = await updateCustomer(user.id, {
+      const submittedPassword = profileForm.password.trim();
+      const customerPayload = {
         firstName: profileForm.firstName,
         lastName: profileForm.lastName,
         email: profileForm.email,
@@ -125,7 +127,10 @@ export default function ProfilePage() {
         },
         idType: existingCustomer?.idType || 'SSN',
         idNumber: existingCustomer?.idNumber || '',
-      });
+        ...(submittedPassword && submittedPassword !== '***' ? { password: submittedPassword } : {}),
+      };
+
+      const updatedCustomer = await updateCustomer(user.id, customerPayload);
       
       // Update user state
       const updatedUserData: any = {
@@ -143,6 +148,7 @@ export default function ProfilePage() {
         title: 'Profile updated',
         description: 'Your profile has been successfully updated',
       });
+      setProfileForm((prev) => ({ ...prev, password: '***' }));
     } catch (error) {
       toast({
         title: 'Update failed',
@@ -456,6 +462,25 @@ export default function ProfilePage() {
                         required
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={profileForm.password}
+                        onFocus={() => {
+                          if (profileForm.password === '***') {
+                            setProfileForm({ ...profileForm, password: '' });
+                          }
+                        }}
+                        onBlur={() => {
+                          if (profileForm.password.trim() === '') {
+                            setProfileForm({ ...profileForm, password: '***' });
+                          }
+                        }}
+                        onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -541,17 +566,6 @@ export default function ProfilePage() {
                     </div>
                     <input type="checkbox" className="rounded" />
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Security</CardTitle>
-                  <CardDescription>Manage your security preferences</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Button variant="outline">Change Password</Button>
-                  <Button variant="outline">Enable Two-Factor Authentication</Button>
                 </CardContent>
               </Card>
 

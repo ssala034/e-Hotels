@@ -76,16 +76,16 @@ export default function EmployeeDashboardPage() {
 
     setIsLoading(true);
     try {
-      const isEmployee = user.role === 'Employee';
-      const hotelId = user.hotelId;
+      const scopedHotelId = user.hotelId;
+      const shouldScopeToHotel = Boolean(scopedHotelId);
 
-      if (isEmployee && !hotelId) {
+      if (user.role === 'Employee' && !scopedHotelId) {
         throw new Error('Employee is not assigned to a hotel');
       }
 
       const [bookingsData, rentingsData] = await Promise.all([
-        isEmployee ? getHotelBookings(hotelId as string) : getAllBookings(),
-        isEmployee ? getHotelRentings(hotelId as string) : getAllRentings(),
+        shouldScopeToHotel ? getHotelBookings(scopedHotelId as string) : getAllBookings(),
+        shouldScopeToHotel ? getHotelRentings(scopedHotelId as string) : getAllRentings(),
       ]);
       setBookings(bookingsData);
       setRentings(rentingsData);
@@ -187,12 +187,23 @@ export default function EmployeeDashboardPage() {
     e.preventDefault();
     if (!user) return;
 
+    const employeeId = user.employeeId || user.id;
+    const canPayRenting = eligibleUnpaidRentings.some((renting) => renting.id === paymentForm.rentingId);
+    if (!canPayRenting) {
+      toast({
+        title: 'Payment failed',
+        description: 'You can only process payments for rentings you converted.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       await processPayment({
         rentingId: paymentForm.rentingId,
         amount: Number(paymentForm.amount),
         paymentMethod: paymentForm.paymentMethod,
-        employeeId: user.id,
+        employeeId,
       });
 
       toast({
@@ -253,17 +264,20 @@ export default function EmployeeDashboardPage() {
         booking.id.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const currentHotelRentings = rentings.filter(
-    (r) => user?.role !== 'Employee' || r.room?.hotelId === user?.hotelId
+  const currentHotelRentings = rentings.filter((r) =>
+    !user?.hotelId || r.room?.hotelId === user.hotelId
   );
 
   const unpaidRentings = rentings.filter((r) => {
-    // Check if total amount is greater than amount paid and belongs to employee's hotel
+    // Check if total amount is greater than amount paid and belongs to the assigned hotel
     return (
       r.amountPaid < r.totalAmount &&
-      (user?.role !== 'Employee' || r.room?.hotelId === user?.hotelId)
+      (!user?.hotelId || r.room?.hotelId === user.hotelId)
     );
   });
+
+  const currentEmployeeId = user?.employeeId || user?.id || '';
+  const eligibleUnpaidRentings = unpaidRentings.filter((renting) => renting.employeeId === currentEmployeeId);
 
   if (!user || (user.role !== 'Employee' && user.role !== 'Admin')) return null;
 
@@ -616,7 +630,7 @@ export default function EmployeeDashboardPage() {
                         className={selectClassName}
                       >
                         <option value="">Select a rental</option>
-                        {unpaidRentings.map((renting) => (
+                        {eligibleUnpaidRentings.map((renting) => (
                           <option key={renting.id} value={renting.id}>
                             {renting.id} - Room #{renting.room?.roomNumber} - {formatCurrency(renting.totalAmount)} (Paid: {formatCurrency(renting.amountPaid)})
                           </option>
@@ -663,11 +677,11 @@ export default function EmployeeDashboardPage() {
               {/* Unpaid Rentings List */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Unpaid Rentals ({unpaidRentings.length})</CardTitle>
+                  <CardTitle>Unpaid Rentals ({eligibleUnpaidRentings.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {unpaidRentings.map((renting) => (
+                    {eligibleUnpaidRentings.map((renting) => (
                       <div key={renting.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
                           <p className="font-medium">Room #{renting.room?.roomNumber}</p>
@@ -681,9 +695,9 @@ export default function EmployeeDashboardPage() {
                         </div>
                       </div>
                     ))}
-                    {unpaidRentings.length === 0 && (
+                    {eligibleUnpaidRentings.length === 0 && (
                       <p className="text-center text-muted-foreground py-6">
-                        All rentals are paid
+                        No unpaid rentals assigned to you
                       </p>
                     )}
                   </div>
