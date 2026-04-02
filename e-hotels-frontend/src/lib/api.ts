@@ -329,8 +329,16 @@ export async function createEmployee(data: EmployeeData, managerPersonId: number
   });
 }
 
-export async function updateEmployee(id: string, data: EmployeeData): Promise<Employee> {
-  return fetchApi<Employee>(`/api/employees/${encodeURIComponent(id)}`, {
+export async function updateEmployee(
+  id: string,
+  data: EmployeeData,
+  options?: { managerPersonId?: number; replacementManagerPersonId?: number }
+): Promise<Employee> {
+  const qs = toQueryString({
+    managerPersonId: options?.managerPersonId,
+    replacementManagerPersonId: options?.replacementManagerPersonId,
+  });
+  return fetchApi<Employee>(`/api/employees/${encodeURIComponent(id)}${qs}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });

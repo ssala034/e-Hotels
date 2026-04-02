@@ -6,10 +6,15 @@ router = APIRouter()
 
 @router.post("")
 def process_payment(data: PaymentData):
-    payment = db_create_payment(data.model_dump())
-    if not payment:
-        raise HTTPException(status_code=404, detail="Renting not found")
-    return payment
+    try:
+        payment = db_create_payment(data.model_dump())
+        if not payment:
+            raise HTTPException(status_code=404, detail="Renting not found")
+        return payment
+    except HTTPException:
+        raise
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
 
 
 @router.get("/renting/{renting_id}")

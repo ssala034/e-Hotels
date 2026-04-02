@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { searchRooms, getAllChains, getAllHotels, getAllRooms, getChainAveragePrices } from '@/lib/api';
 import { Room, HotelChain, Hotel, RoomCapacity, ViewType } from '@/types';
@@ -24,6 +24,7 @@ const capacities: RoomCapacity[] = ['Single', 'Double', 'Triple', 'Suite', 'Fami
 type BreadcrumbLevel = 'chains' | 'hotels' | 'rooms';
 
 export default function SearchPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   // ── Data fetched from API ──
@@ -58,6 +59,7 @@ export default function SearchPage() {
   const [roomAmenityFilter, setRoomAmenityFilter] = useState<string[]>([]);
   const [roomExtendableOnly, setRoomExtendableOnly] = useState(false);
   const [roomExcludeDamaged, setRoomExcludeDamaged] = useState(false);
+  const hasRoomDateRange = !roomCheckIn || !roomCheckOut || roomCheckIn < roomCheckOut;
 
   const [showFilters, setShowFilters] = useState(true);
 
@@ -135,6 +137,11 @@ export default function SearchPage() {
   useEffect(() => {
     if (!selectedHotel) return;
     const fetchRooms = async () => {
+      if (roomCheckIn && roomCheckOut && roomCheckIn >= roomCheckOut) {
+        setRooms([]);
+        return;
+      }
+
       setIsLoading(true);
       try {
         const results = await searchRooms({
@@ -570,6 +577,9 @@ export default function SearchPage() {
                   min={roomCheckIn || new Date().toISOString().split('T')[0]}
                 />
               </div>
+              {!hasRoomDateRange && (
+                <p className="text-sm text-destructive">Check-out date must be after check-in date.</p>
+              )}
 
               {/* Capacity */}
               <div className="space-y-2">
@@ -777,12 +787,33 @@ export default function SearchPage() {
                               <Button asChild className="flex-1">
                                 <Link href={`/rooms/${room.id}`}>View Details</Link>
                               </Button>
-                              <Button asChild variant="outline" className="flex-1">
-                                <Link
-                                  href={`/booking/confirm?roomId=${room.id}&checkIn=${roomCheckIn}&checkOut=${roomCheckOut}`}
-                                >
-                                  Book Now
-                                </Link>
+                              <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => {
+                                  if (!roomCheckIn || !roomCheckOut) {
+                                    toast({
+                                      title: 'Missing dates',
+                                      description: 'Please select check-in and check-out dates first',
+                                      variant: 'destructive',
+                                    });
+                                    return;
+                                  }
+
+                                  if (roomCheckIn >= roomCheckOut) {
+                                    toast({
+                                      title: 'Invalid dates',
+                                      description: 'Check-out date must be after check-in date',
+                                      variant: 'destructive',
+                                    });
+                                    return;
+                                  }
+
+                                  router.push(`/booking/confirm?roomId=${room.id}&checkIn=${roomCheckIn}&checkOut=${roomCheckOut}`);
+                                }}
+                                disabled={!hasRoomDateRange}
+                              >
+                                Book Now
                               </Button>
                             </div>
                           </div>

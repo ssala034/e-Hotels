@@ -120,6 +120,7 @@ export default function AdminDashboardPage() {
     idType: 'SSN' as IDType,
     idNumber: '',
   });
+  const [replacementManagerEmployeeId, setReplacementManagerEmployeeId] = useState('');
 
   useEffect(() => {
     if (!user || user.role !== 'Admin') {
@@ -464,6 +465,57 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     if (!selectedEmployee) return;
 
+    const isEditingManager = selectedEmployee.role === 'Manager';
+    const isCurrentManager = user?.personId === selectedEmployee.personId;
+    const replacementCandidates = employees.filter(
+      (employee) => employee.hotelId === selectedEmployee.hotelId && employee.id !== selectedEmployee.id,
+    );
+
+    if (employeeForm.role === 'Manager') {
+      toast({ title: 'Error', description: 'Manager role cannot be selected directly.', variant: 'destructive' });
+      return;
+    }
+
+    if (isEditingManager) {
+      if (!isCurrentManager) {
+        toast({
+          title: 'Error',
+          description: 'Only the current manager can transfer manager responsibilities.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (replacementCandidates.length === 0) {
+        toast({
+          title: 'Error',
+          description: 'No other employee in this hotel can be selected as manager.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (!replacementManagerEmployeeId) {
+        toast({
+          title: 'Error',
+          description: 'Select another employee in this hotel to become manager.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    const replacementManagerPersonId = isEditingManager
+      ? Number.parseInt(replacementManagerEmployeeId.replace('emp-', ''), 10)
+      : undefined;
+
+    if (isEditingManager && !Number.isInteger(replacementManagerPersonId)) {
+      toast({
+        title: 'Error',
+        description: 'Selected replacement manager is invalid.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       await updateEmployee(selectedEmployee.id, {
         firstName: employeeForm.firstName,
@@ -480,13 +532,21 @@ export default function AdminDashboardPage() {
           zipCode: employeeForm.zipCode,
           country: employeeForm.country,
         },
+      }, {
+        managerPersonId: user?.personId,
+        replacementManagerPersonId,
       });
       toast({ title: 'Employee updated successfully' });
       setModalMode(null);
       setSelectedEmployee(null);
+      setReplacementManagerEmployeeId('');
       loadData();
     } catch (error) {
-      toast({ title: 'Error', description: 'Could not update employee', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Could not update employee',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -527,6 +587,25 @@ export default function AdminDashboardPage() {
       .filter((hotel) => hotel.chainId === employeeForm.chainId)
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [hotels, employeeForm.chainId]);
+
+  const isEditingManager = useMemo(
+    () => modalMode === 'edit' && selectedEmployee?.role === 'Manager',
+    [modalMode, selectedEmployee?.role],
+  );
+
+  const managerReplacementCandidates = useMemo(() => {
+    if (!isEditingManager || !selectedEmployee) return [];
+    return employees.filter(
+      (employee) => employee.hotelId === selectedEmployee.hotelId && employee.id !== selectedEmployee.id,
+    );
+  }, [isEditingManager, selectedEmployee, employees]);
+
+  const canTransferManagerRole = useMemo(
+    () => !!(isEditingManager && selectedEmployee && user?.personId === selectedEmployee.personId),
+    [isEditingManager, selectedEmployee, user?.personId],
+  );
+
+  const managerTransferBlocked = isEditingManager && managerReplacementCandidates.length === 0;
 
   useEffect(() => {
     if (modalMode !== 'create') return;
@@ -1093,6 +1172,7 @@ export default function AdminDashboardPage() {
                     idType: 'SSN' as IDType,
                     idNumber: '',
                   });
+                  setReplacementManagerEmployeeId('');
                 }}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Employee
@@ -1136,14 +1216,48 @@ export default function AdminDashboardPage() {
                             onChange={(e) => setEmployeeForm({ ...employeeForm, role: e.target.value as EmployeeRole })}
                             required
                             className={selectClassName}
+                            disabled={isEditingManager && !canTransferManagerRole}
                           >
-                            <option value="Manager">Manager</option>
+                            {employeeForm.role === 'Manager' && <option value="Manager" hidden>Current: Manager</option>}
                             <option value="Receptionist">Receptionist</option>
                             <option value="Housekeeping">Housekeeping</option>
                             <option value="Maintenance">Maintenance</option>
                             <option value="Concierge">Concierge</option>
                           </select>
                         </div>
+                        {isEditingManager && (
+                          <div className="space-y-2 md:col-span-2">
+                            <Label>Update Manager</Label>
+                            <select
+                              value={replacementManagerEmployeeId}
+                              onChange={(e) => setReplacementManagerEmployeeId(e.target.value)}
+                              className={selectClassName}
+                              required
+                              disabled={!canTransferManagerRole || managerReplacementCandidates.length === 0}
+                            >
+                              <option value="">
+                                {managerReplacementCandidates.length === 0
+                                  ? 'No available employee in this hotel'
+                                  : 'Select the new manager'}
+                              </option>
+                              {managerReplacementCandidates.map((employee) => (
+                                <option key={employee.id} value={employee.id}>
+                                  {employee.firstName} {employee.lastName} ({employee.role})
+                                </option>
+                              ))}
+                            </select>
+                            {!canTransferManagerRole && (
+                              <p className="text-sm text-destructive">
+                                Only the current manager can transfer manager responsibilities.
+                              </p>
+                            )}
+                            {managerTransferBlocked && (
+                              <p className="text-sm text-destructive">
+                                You cannot update this manager because there is no other employee in this hotel.
+                              </p>
+                            )}
+                          </div>
+                        )}
                         {modalMode === 'create' && (
                           <>
                             <div className="space-y-2">
@@ -1246,9 +1360,29 @@ export default function AdminDashboardPage() {
                           Select an existing chain and hotel to assign this employee.
                         </p>
                       )}
+                      {isEditingManager && (
+                        <p className="text-sm text-muted-foreground">
+                          To change the current manager role, choose a new role and assign another employee in the same hotel as manager.
+                        </p>
+                      )}
                       <div className="flex gap-2">
-                        <Button type="submit">{modalMode === 'create' ? 'Create Employee' : 'Update Employee'}</Button>
-                        <Button type="button" variant="outline" onClick={() => { setModalMode(null); setSelectedEmployee(null); }}>Cancel</Button>
+                        <Button
+                          type="submit"
+                          disabled={managerTransferBlocked || (isEditingManager && !canTransferManagerRole)}
+                        >
+                          {modalMode === 'create' ? 'Create Employee' : 'Update Employee'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setModalMode(null);
+                            setSelectedEmployee(null);
+                            setReplacementManagerEmployeeId('');
+                          }}
+                        >
+                          Cancel
+                        </Button>
                       </div>
                     </form>
                   </CardContent>
@@ -1275,6 +1409,7 @@ export default function AdminDashboardPage() {
                           <Button size="sm" variant="outline" onClick={() => {
                             setModalMode('edit');
                             setSelectedEmployee(employee);
+                            setReplacementManagerEmployeeId('');
                             setEmployeeForm({
                               firstName: employee.firstName,
                               lastName: employee.lastName,

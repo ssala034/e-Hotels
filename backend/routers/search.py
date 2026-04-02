@@ -16,12 +16,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _validate_date_range(check_in: str, check_out: str) -> None:
+    try:
+        check_in_date = datetime.strptime(check_in, "%Y-%m-%d").date()
+        check_out_date = datetime.strptime(check_out, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    if check_in_date >= check_out_date:
+        raise HTTPException(status_code=400, detail="Check-out date must be after check-in date")
+
+
 @router.post("/rooms")
 def search_rooms(criteria: SearchCriteria):
     """
     Search for available rooms using database queries.
     Applies filters from the database view and applies additional client-side filters.
     """
+    if criteria.checkInDate and criteria.checkOutDate:
+        _validate_date_range(criteria.checkInDate, criteria.checkOutDate)
+
     # Use database to get rooms matching price criteria
     base_rooms = db_search_available_rooms({
         "minPrice": criteria.minPrice,
@@ -116,6 +130,7 @@ def check_availability(
     checkInDate: str = Query(...),
     checkOutDate: str = Query(...),
 ):
+    _validate_date_range(checkInDate, checkOutDate)
     available = not db_check_room_availability(roomId, checkInDate, checkOutDate)
     return {"available": available}
 

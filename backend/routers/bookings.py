@@ -17,7 +17,10 @@ def create_booking(data: BookingData):
     try:
         booking = db_create_booking(data.model_dump())
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        detail = str(exc)
+        if detail in ("Check-out date must be after check-in date", "Invalid date format. Use YYYY-MM-DD."):
+            raise HTTPException(status_code=400, detail=detail)
+        raise HTTPException(status_code=409, detail=detail)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not create booking: {exc}")
 

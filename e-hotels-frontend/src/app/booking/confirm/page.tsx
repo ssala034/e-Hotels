@@ -29,14 +29,26 @@ export default function BookingConfirmPage() {
   const [isBooking, setIsBooking] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
+  const hasValidDateRange = !!checkIn && !!checkOut && checkIn < checkOut;
+
   useEffect(() => {
     if (!roomId) {
       router.push('/search');
       return;
     }
 
+    if (!hasValidDateRange) {
+      toast({
+        title: 'Invalid dates',
+        description: 'Check-out date must be after check-in date',
+        variant: 'destructive',
+      });
+      router.push('/search');
+      return;
+    }
+
     loadRoom();
-  }, [roomId]);
+  }, [roomId, hasValidDateRange]);
 
   const loadRoom = async () => {
     try {
@@ -55,6 +67,15 @@ export default function BookingConfirmPage() {
   };
 
   const handleBooking = async () => {
+    if (!hasValidDateRange) {
+      toast({
+        title: 'Invalid dates',
+        description: 'Check-out date must be after check-in date',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!user) {
       toast({
         title: 'Authentication required',
@@ -112,7 +133,7 @@ export default function BookingConfirmPage() {
     );
   }
 
-  if (!room || !checkIn || !checkOut) {
+  if (!room || !checkIn || !checkOut || !hasValidDateRange) {
     return null;
   }
 

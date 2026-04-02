@@ -4,6 +4,23 @@ from config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
 from datetime import datetime
 
 
+def _parse_iso_date(date_value):
+    return datetime.strptime(str(date_value), "%Y-%m-%d").date()
+
+
+def _validate_date_range(check_in, check_out):
+    try:
+        check_in_date = _parse_iso_date(check_in)
+        check_out_date = _parse_iso_date(check_out)
+    except (TypeError, ValueError):
+        raise ValueError("Invalid date format. Use YYYY-MM-DD.")
+
+    if check_in_date >= check_out_date:
+        raise ValueError("Check-out date must be after check-in date")
+
+    return check_in_date, check_out_date
+
+
 def _normalize_id_type(id_type):
     if not id_type:
         return "SSN"
@@ -1409,6 +1426,9 @@ def db_create_employee_for_manager(data, manager_person_id):
     target_chain_id = _extract_numeric_id(data.get("chainId"))
     target_hotel_name = str(data.get("hotelName") or "").strip()
 
+    if data.get("role") == "Manager":
+        raise ValueError("Manager role cannot be assigned when creating an employee")
+
     if target_chain_id is None or not target_hotel_name:
         return None
 
@@ -1553,7 +1573,7 @@ def db_get_employee_by_id(employee_id):
     finally:
         conn.close()
 
-def db_update_employee(employee_id, data):
+def db_update_employee(employee_id, data, manager_person_id=None, replacement_manager_person_id=None):
     person_id = _extract_numeric_id(employee_id)
     if person_id is None:
         return None
@@ -1588,9 +1608,78 @@ def db_update_employee(employee_id, data):
         WHERE person_id = %s;
     """
 
+    query_employee_context = """
+        SELECT chain_id, hotel_id, role
+        FROM employee
+        WHERE person_id = %s
+        LIMIT 1;
+    """
+
+    query_replacement_employee = """
+        SELECT person_id
+        FROM employee
+        WHERE person_id = %s
+          AND chain_id = %s
+          AND hotel_id = %s
+        LIMIT 1;
+    """
+
+    update_employee_role = """
+        UPDATE employee
+        SET role = %s
+        WHERE person_id = %s;
+    """
+
+    promote_replacement_manager = """
+        UPDATE employee
+        SET role = 'Manager'
+        WHERE person_id = %s
+          AND chain_id = %s
+          AND hotel_id = %s;
+    """
+
+    update_hotel_manager = """
+        UPDATE hotels
+        SET manager_id = %s
+        WHERE chain_id = %s
+          AND hotel_id = %s;
+    """
+
+    manager_person_numeric_id = _extract_numeric_id(manager_person_id)
+    replacement_manager_numeric_id = _extract_numeric_id(replacement_manager_person_id)
+    new_role = data["role"]
+
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            cur.execute(query_employee_context, (person_id,))
+            employee_context = cur.fetchone()
+            if not employee_context:
+                conn.rollback()
+                return None
+
+            current_chain_id, current_hotel_id, current_role = employee_context
+            is_manager_transfer = current_role == "Manager" and new_role != "Manager"
+
+            if current_role != "Manager" and new_role == "Manager":
+                raise ValueError("Manager role cannot be assigned directly. Use manager transfer.")
+
+            if is_manager_transfer:
+                if manager_person_numeric_id is None or manager_person_numeric_id != person_id:
+                    raise PermissionError("Only the current manager can transfer the manager role.")
+                if replacement_manager_numeric_id is None:
+                    raise ValueError("A replacement manager must be selected.")
+                if replacement_manager_numeric_id == person_id:
+                    raise ValueError("Replacement manager must be a different employee.")
+
+                cur.execute(
+                    query_replacement_employee,
+                    (replacement_manager_numeric_id, current_chain_id, current_hotel_id),
+                )
+                replacement_employee = cur.fetchone()
+                if not replacement_employee:
+                    raise ValueError("Replacement manager must belong to the same hotel.")
+
             cur.execute(
                 query_person,
                 (
@@ -1613,7 +1702,20 @@ def db_update_employee(employee_id, data):
                 conn.rollback()
                 return None
 
-            cur.execute(query_employee, (chain_id, hotel_id, data["role"], person_id))
+            if is_manager_transfer:
+                cur.execute(update_employee_role, (new_role, person_id))
+                cur.execute(
+                    promote_replacement_manager,
+                    (replacement_manager_numeric_id, current_chain_id, current_hotel_id),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError("Could not promote the selected replacement manager.")
+                cur.execute(
+                    update_hotel_manager,
+                    (replacement_manager_numeric_id, current_chain_id, current_hotel_id),
+                )
+            else:
+                cur.execute(query_employee, (chain_id, hotel_id, data["role"], person_id))
 
         conn.commit()
         return db_get_employee_by_id(person_id)
@@ -1969,6 +2071,8 @@ def db_create_booking(data):
 
     if customer_person_id is None or room_num is None:
         return None
+
+    _validate_date_range(data.get("checkInDate"), data.get("checkOutDate"))
 
     room_lookup = """
         SELECT chain_id, hotel_id, room_num, price
@@ -2865,13 +2969,15 @@ def db_get_payments_by_renting(renting_id):
 
 def db_create_payment(data):
     reservation_id = _extract_numeric_id(data.get("rentingId"))
-    if reservation_id is None:
+    employee_person_id = _extract_numeric_id(data.get("employeeId"))
+    if reservation_id is None or employee_person_id is None:
         return None
 
     mark_paid_query = """
         UPDATE hotel_renting
         SET price_paid = rental_price
         WHERE reservation_id = %s
+                    AND person_id = %s
           AND price_paid IS NULL
           AND %s::numeric >= rental_price
         RETURNING rental_price;
@@ -2885,11 +2991,18 @@ def db_create_payment(data):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(mark_paid_query, (reservation_id, data["amount"]))
+            cur.execute(mark_paid_query, (reservation_id, employee_person_id, data["amount"]))
             paid_row = cur.fetchone()
             if not paid_row:
-                conn.rollback()
-                return None
+                cur.execute(
+                    "SELECT 1 FROM hotel_renting WHERE reservation_id = %s LIMIT 1;",
+                    (reservation_id,),
+                )
+                renting_exists = cur.fetchone() is not None
+                if not renting_exists:
+                    conn.rollback()
+                    return None
+                raise PermissionError("You can only process payments for rentings you converted.")
 
             cur.execute(complete_reservation_query, (reservation_id,))
             if cur.rowcount == 0:
@@ -3007,6 +3120,11 @@ def db_check_room_availability(room_id, check_in, check_out):
     chain_id, hotel_id, room_num = _extract_room_parts(room_id)
     if room_num is None:
         return True  # Not available if room cannot be identified
+
+    try:
+        _validate_date_range(check_in, check_out)
+    except ValueError:
+        return True
 
     query = """
         SELECT 1
