@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS hotel_chains(
     region			VARCHAR(30) NOT NULL,
 	street_name		VARCHAR(30) NOT NULL,
 	street_number	SMALLINT NOT NULL,
-    postalcode		CHAR(6) NOT NULL,
+    postalcode		VARCHAR(10) NOT NULL,
 	PRIMARY KEY		(chain_id)
 );
 
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS hotels (
    region			VARCHAR(30) NOT NULL,
    street_name		VARCHAR(30) NOT NULL,
    street_number	SMALLINT NOT NULL,
-   postalcode		CHAR(6) NOT NULL,
+   postalcode		VARCHAR(10) NOT NULL,
    manager_id		INTEGER,
 
    PRIMARY KEY (chain_id, hotel_id),
@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS rooms (
 CREATE TABLE IF NOT EXISTS room_amenities (
     chain_id        INTEGER NOT NULL,
     hotel_id        INTEGER NOT NULL,
-    room_num        CHAR(5) NOT NULL,
+    room_num        VARCHAR(5) NOT NULL,
     amenity         VARCHAR(20) NOT NULL,
     PRIMARY KEY (chain_id, hotel_id, room_num, amenity),
     FOREIGN KEY (chain_id, hotel_id, room_num) REFERENCES rooms (chain_id, hotel_id, room_num)
@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS room_amenities (
 CREATE TABLE IF NOT EXISTS room_extendible (
     chain_id        INTEGER NOT NULL,
     hotel_id        INTEGER NOT NULL,
-    room_num        CHAR(5) NOT NULL,
+    room_num        VARCHAR(5) NOT NULL,
     extendible      VARCHAR(50) NOT NULL,
     PRIMARY KEY (chain_id, hotel_id, room_num, extendible),
     FOREIGN KEY (chain_id, hotel_id, room_num) REFERENCES rooms (chain_id, hotel_id, room_num)
@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS room_extendible (
 CREATE TABLE IF NOT EXISTS room_issues (
     chain_id        INTEGER NOT NULL,
     hotel_id        INTEGER NOT NULL,
-    room_num        CHAR(5) NOT NULL,
+    room_num        VARCHAR(5) NOT NULL,
     issue      		VARCHAR(100) NOT NULL,
     PRIMARY KEY (chain_id, hotel_id, room_num, issue),
     FOREIGN KEY (chain_id, hotel_id, room_num) REFERENCES rooms (chain_id, hotel_id, room_num)
@@ -194,7 +194,7 @@ CREATE TABLE IF NOT EXISTS hotel_reservation (
     reservation_id          INTEGER GENERATED ALWAYS AS IDENTITY,
     chain_id                INTEGER NOT NULL,
     hotel_id                INTEGER NOT NULL,
-    room_num                CHAR(3) NOT NULL,
+    room_num                VARCHAR(5) NOT NULL,
     person_id               INTEGER NOT NULL,
     start_date              DATE NOT NULL,
     end_date                DATE NOT NULL,
@@ -215,7 +215,7 @@ CREATE TABLE IF NOT EXISTS hotel_reservation (
 CREATE TABLE IF NOT EXISTS has (
 	chain_id        INTEGER NOT NULL,
     hotel_id        INTEGER NOT NULL,
-    room_num        CHAR(5) NOT NULL,
+    room_num        VARCHAR(5) NOT NULL,
 	reservation_id	INTEGER,
 
 	PRIMARY KEY (chain_id, hotel_id, room_num, reservation_id),
@@ -269,7 +269,7 @@ CREATE TABLE IF NOT EXISTS archived_reservation (
     archived_price_paid     NUMERIC(8,2),
     archived_hotel_name     VARCHAR(50),
     archived_chain_name     VARCHAR(50),
-    archived_room_num       CHAR(3),
+    archived_room_num       VARCHAR(5),
     archived_customer_id    INTEGER NOT NULL,
     archived_employee_id    INTEGER,
     archived_customer_name  VARCHAR(60) NOT NULL,
