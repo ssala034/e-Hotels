@@ -57,4 +57,4 @@ JOIN room_info ri ON nr.room_num = ri.room_num;
 -- Step 4: Mark rooms as Occupied
 UPDATE rooms 
 SET status = 'Occupied' 
-WHERE hotel_id = 1 AND room_num IN ('102', '201');
+WHERE hotel_id = 1 AND room_num ='101';
