@@ -1,3 +1,5 @@
+SET search_path TO "HotelProject";
+
 SELECT
     hr.reservation_id,
     hr.person_id AS customer_person_id,

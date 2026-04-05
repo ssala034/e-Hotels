@@ -1,3 +1,5 @@
+SET search_path TO "HotelProject";
+
 UPDATE hotel_renting
 SET price_paid = rental_price
 WHERE reservation_id = 2

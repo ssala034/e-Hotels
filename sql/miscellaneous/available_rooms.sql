@@ -1,3 +1,5 @@
+SET search_path TO "HotelProject";
+
 SELECT
   r.chain_id,
   r.hotel_id,
